@@ -3,21 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:nova_science/Screens/StartScreen/JoinScreen.dart';
 import 'StartScreen.dart';
 
-class Onboardingscreen extends StatefulWidget {
-  const Onboardingscreen({super.key});
+class OnboardingScreen extends StatefulWidget {
+  const OnboardingScreen({super.key});
 
   @override
-  State<Onboardingscreen> createState() => _OnboardingscreenState();
+  State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingscreenState extends State<Onboardingscreen>
+class _OnboardingScreenState extends State<OnboardingScreen>
     with SingleTickerProviderStateMixin {
   PageController _pageController = PageController();
   int currentPage = 0;
 
-  // Animation controller for smooth transitions
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
 
   List<Widget> _pages = [
     Startscreen(
@@ -50,14 +50,17 @@ class _OnboardingscreenState extends State<Onboardingscreen>
   void initState() {
     super.initState();
 
-    // Initialize animation controller and animation
     _animationController = AnimationController(
       duration: Duration(milliseconds: 500),
       vsync: this,
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _fadeAnimation = Tween<double>(begin: 0.2, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
 
     _pageController.addListener(() {
@@ -89,13 +92,17 @@ class _OnboardingscreenState extends State<Onboardingscreen>
               });
             },
             itemBuilder: (context, index) {
-              return Container(
-                width: double.infinity,
-                height: double.infinity,
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: _pages[index],
-                ),
+              return AnimatedBuilder(
+                animation: _animationController,
+                builder: (context, child) {
+                  return Transform.scale(
+                    scale: _scaleAnimation.value,
+                    child: Opacity(
+                      opacity: _fadeAnimation.value,
+                      child: _pages[index],
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -122,7 +129,7 @@ class _OnboardingscreenState extends State<Onboardingscreen>
                     icon: Icon(CupertinoIcons.back, color: Colors.blue),
                   ),
                 ),
-                // Dots indicator with animation
+                // Dots indicator with animated transitions
                 Row(
                   children: List.generate(
                     _pages.length,
@@ -137,11 +144,12 @@ class _OnboardingscreenState extends State<Onboardingscreen>
                             ? Colors.blue
                             : Colors.grey,
                         boxShadow: [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 4.0,
-                            offset: Offset(2, 2),
-                          ),
+                          if (currentPage == index)
+                            BoxShadow(
+                              color: Colors.blueAccent.withOpacity(0.5),
+                              blurRadius: 10.0,
+                              spreadRadius: 2.0,
+                            ),
                         ],
                       ),
                     ),
@@ -149,7 +157,7 @@ class _OnboardingscreenState extends State<Onboardingscreen>
                 ),
                 // Next or Finish button
                 currentPage == _pages.length - 1
-                    ? TextButton(
+                    ? ElevatedButton(
                   onPressed: () {
                     Navigator.pushReplacement(
                       context,
@@ -158,15 +166,13 @@ class _OnboardingscreenState extends State<Onboardingscreen>
                       ),
                     );
                   },
-                  style: ButtonStyle(
-                    backgroundColor: MaterialStateProperty.all<Color>(
-                      Color(0xff58B9A8),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xff58B9A8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10.0),
                     ),
-                    shape: MaterialStateProperty.all<OutlinedBorder>(
-                      RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10.0),
-                      ),
-                    ),
+                    padding: EdgeInsets.symmetric(
+                        vertical: 10.0, horizontal: 20.0),
                   ),
                   child: Text(
                     "Finish",
