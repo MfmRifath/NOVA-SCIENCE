@@ -1,23 +1,22 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert'; // Import the json package
 
-// Video class
+// Define the Video class
 class Video {
-  late final String title;
-  final String videoUrl;
-  final String? duration;
+  String title;
+  String videoUrl;
 
-  Video({required this.title, required this.videoUrl, this.duration});
+  Video({required this.title, required this.videoUrl});
 
-  // Factory constructor to create a Video from Firestore document
-  factory Video.fromFirestore(Map<String, dynamic> data) {
+  // Method to create a Video from a map
+  factory Video.fromMap(Map<String, dynamic> data) {
     return Video(
       title: data['title'] ?? '',
       videoUrl: data['videoUrl'] ?? '',
-      duration: data['duration']
     );
   }
 
-  // Convert Video instance to a Map for Firestore
+  // Convert Video to a map
   Map<String, dynamic> toMap() {
     return {
       'title': title,
@@ -26,24 +25,26 @@ class Video {
   }
 }
 
-// Section class
+// Define the Section class
 class Section {
-  late final String sectionTitle;
-  final List<Video> videos;
+  String sectionTitle;
+  List<Video> videos;
 
   Section({required this.sectionTitle, required this.videos});
 
-  // Factory constructor to create a Section from Firestore document
-  factory Section.fromFirestore(Map<String, dynamic> data) {
+  factory Section.fromMap(Map<String, dynamic> data) {
+    var videosData = data['videos'] ?? [];
+    List<Video> videoList = List<Video>.from(
+      videosData.map((videoData) => Video.fromMap(videoData)),
+    );
+
     return Section(
       sectionTitle: data['sectionTitle'] ?? '',
-      videos: (data['videos'] as List<dynamic>? ?? [])
-          .map((videoData) => Video.fromFirestore(videoData))
-          .toList(),
+      videos: videoList,
     );
   }
 
-  // Convert Section instance to a Map for Firestore
+  // Convert Section to a map
   Map<String, dynamic> toMap() {
     return {
       'sectionTitle': sectionTitle,
@@ -52,64 +53,75 @@ class Section {
   }
 }
 
-// Course class
 class Course {
-  late final String? id;
-  late final String? courseTitle;
-  late final String? description;
-  final DateTime? startDate; // Start date of the course
-  final DateTime? endDate; // End date of the course
-  final int? enrolledStudents; // Number of students enrolled in the course
-  // Duration of the course
-  final String? instructor; // Instructor name
-  final String? imageUrl; // URL of the course image (nullable)
-  late final double? price;
-  final List<Section>? sections;
-  late final String? duration;
+  String? id; // Document ID
+  String? courseTitle;
+  String? description;
+  double? price;
+  DateTime? startDate;
+  DateTime? endDate;
+  String? instructor;
+  String? duration;
+  String? imageUrl;
+  List<Section> sections;
+  String? status;
 
   Course({
-    this.courseTitle,
-    this.sections,
     this.id,
-    this.duration,
+    this.courseTitle,
     this.description,
+    this.price,
     this.startDate,
     this.endDate,
-    this.enrolledStudents = 0, // Default to 0 if not provided
     this.instructor,
-    this.imageUrl, // Nullable image URL
-    this.price,
+    this.duration,
+    this.imageUrl,
+    this.sections = const [],
+    this.status,
   });
 
-  // Factory constructor to create a Course from Firestore document
-  factory Course.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  // Method to create a Course from a map
+  factory Course.fromMap(Map<String, dynamic> data, String? documentId) {
+    // Ensure sections is parsed correctly as a list of Section objects
+    List<Section> sectionList = [];
+
+    if (data['sections'] is List) {
+      sectionList = (data['sections'] as List).map((sectionData) {
+        // Ensure sectionData is a Map
+        if (sectionData is Map<String, dynamic>) {
+          return Section.fromMap(sectionData);
+        }
+        return null; // or throw an exception if invalid data
+      }).whereType<Section>().toList(); // Filter out any null values
+    }
+
     return Course(
-      id: doc.id, // Get the document ID
-      courseTitle: data['courseTitle'] ?? '',
-      sections: (data['sections'] as List<dynamic>? ?? [])
-          .map((section) => Section.fromFirestore(section))
-          .toList(),
-      description: data['description'] ??'',
-      startDate: data['startDate'] ,
-      endDate: data['endDate'] ,
-      enrolledStudents: data['enrolledStudents'],
-      instructor: data['instructor'] ?? '',
-      price: data['price']
+      id: documentId, // Set the document ID here
+      courseTitle: data['courseTitle'] as String?,
+      description: data['description'] as String?,
+      price: (data['price'] as num?)?.toDouble(),
+      startDate: (data['startDate'] as Timestamp?)?.toDate(),
+      endDate: (data['endDate'] as Timestamp?)?.toDate(),
+      instructor: data['instructor'] as String?,
+      duration: data['duration'] as String?,
+      imageUrl: data['imageUrl'] as String?,
+      status: data['status'] as String?,
+      sections: sectionList,
     );
   }
-
-  // Convert Course instance to a Map for Firestore
+  // Convert Course to a map
   Map<String, dynamic> toMap() {
     return {
       'courseTitle': courseTitle,
-      'sections': sections?.map((section) => section.toMap()).toList() ?? [],
       'description': description,
-      'startDate':startDate,
-      'endDate':endDate,
-      'enrolledStudents': enrolledStudents,
-      'instructor':instructor,
-      'price':price
+      'price': price,
+      'startDate': startDate != null ? Timestamp.fromDate(startDate!) : null,
+      'endDate': endDate != null ? Timestamp.fromDate(endDate!) : null,
+      'instructor': instructor,
+      'duration': duration,
+      'imageUrl': imageUrl,
+      'status': status,
+      'sections': sections.map((section) => section.toMap()).toList(),
     };
   }
 }

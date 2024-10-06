@@ -1,17 +1,17 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:nova_science/Screens/AddCourseScreen.dart';
 import 'package:provider/provider.dart';
 import '../../Modals/CourseAndSectionAndVideos.dart';
 import '../../Service/CourseProvider.dart';
-
-String selectedCourseId = '';
-
+String? selectedCourseId;
 class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Access the CourseProvider
     final courseProvider = Provider.of<CourseProvider>(context);
-    final courses = courseProvider.courses; // Assuming you have a 'courses' list
+    final isLoading = courseProvider.isLoading; // Handle loading state
+    final hasError = courseProvider.hasError; // Handle error state
 
     return Scaffold(
       appBar: AppBar(
@@ -54,14 +54,31 @@ class HomeScreen extends StatelessWidget {
                   _buildSearchBar(),
                   SizedBox(height: 30),
 
-                  // Continue Watching Section
+                  // Free Watching Section
                   _buildSectionTitle("Free Watching"),
                   SizedBox(height: 15),
 
-                  // Horizontally Scrollable Course List or Add Video Button
-                  courses.isNotEmpty
-                      ? _buildHorizontalCourseList(courses: courses, context: context)
-                      : _buildAddVideoButton(context),
+                  // Display loader or the courses
+                  if (isLoading)
+                    Center(child: CircularProgressIndicator())
+                  else if (hasError)
+                    Center(child: Text("Failed to load courses. Please try again.", style: TextStyle(color: Colors.red)))
+                  else
+                    FutureBuilder<List<DocumentSnapshot<Object?>>?>(
+                      future: courseProvider.getFreeCourses(), // Ensure this returns a Future
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Center(child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError) {
+                          return Center(child: Text("Failed to load courses.", style: TextStyle(color: Colors.red)));
+                        }
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return Center(child: Text("No courses available.")); // Handle empty courses list
+                        }
+                        return _buildCoursesList(snapshot.data!, context);
+                      },
+                    ),
 
                   SizedBox(height: 30),
 
@@ -69,10 +86,30 @@ class HomeScreen extends StatelessWidget {
                   _buildSectionTitle("My Courses"),
                   SizedBox(height: 10),
 
-                  // Horizontally Scrollable Course List or Add Course Button
-                  courses.isNotEmpty
-                      ? _buildHorizontalCourseList(courses: courses, context: context)
-                      : _buildAddCourseButton(context),
+                  // Display loader or the courses
+                  if (isLoading)
+                    Center(child: CircularProgressIndicator())
+                  else if (hasError)
+                    Center(child: Text("Failed to load courses. Please try again.", style: TextStyle(color: Colors.red)))
+                  else
+                    FutureBuilder<List<DocumentSnapshot<Object?>>?>(
+                      future: courseProvider.getMyCourses(), // Ensure this returns a Future
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Center(child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError) {
+                          return Center(child: Text("Failed to load courses.", style: TextStyle(color: Colors.red)));
+                        }
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return Center(child: Text("No courses available.")); // Handle empty courses list
+                        }
+                        return _buildCoursesList(snapshot.data!, context);
+                      },
+                    ),
+
+                  SizedBox(height: 30),
+                  _buildAddCourseButton(context), // Move Add Course button outside of the course lists
                 ],
               ),
             ),
@@ -117,47 +154,35 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Add Course Button
-  Widget _buildAddCourseButton(BuildContext context) {
-
-    return Center(
-      child: ElevatedButton.icon(
-        onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (context)=> AddCourseScreen())); // Navigate to Add Course Screen
-        },
-        icon: Icon(Icons.add),
-        label: Text("Add Course"),
-      ),
-    );
-  }
-
-  // Add Video Button
-  Widget _buildAddVideoButton(BuildContext context) {
-    return Center(
-      child: ElevatedButton.icon(
-        onPressed: () {
-          Navigator.pushNamed(context, '/addVideoScreen'); // Navigate to Add Video Screen
-        },
-        icon: Icon(Icons.add),
-        label: Text("Add Video"),
-      ),
-    );
-  }
-
-  Widget _buildHorizontalCourseList({required List<Course> courses, required BuildContext context}) {
+  Widget _buildCoursesList(List<DocumentSnapshot<Object?>> courses, BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: courses.map((course) => _buildAnimatedCourseCard(
-          courseTitle: course.courseTitle!,
-          description: course.description!,
-          time: course.duration!,
-          imageUrl: course.imageUrl!,
-          context: context, id: course.id!,
-        )).toList(),
+        children: courses.map((course) {
+          final data = course.data() as Map<String, dynamic>?; // Safely cast data to Map
+          if (data == null) {
+            return Container(); // Skip if data is null
+          }
+
+          // Use null-aware operators to provide default values if necessary
+          final courseTitle = data['courseTitle'] ?? 'Untitled Course';
+          final description = data['description'] ?? 'No description available.';
+          final time = data['duration'] ?? 'Duration not specified';
+          final imageUrl = data['imageUrl'] ?? 'assets/images/default_image.jpg'; // Provide a default image URL
+
+          return _buildAnimatedCourseCard(
+            courseTitle: courseTitle,
+            description: description,
+            time: time,
+            imageUrl: imageUrl,
+            context: context,
+            id: course.id,
+          );
+        }).toList(),
       ),
     );
   }
+
 
   Widget _buildAnimatedCourseCard({
     required String courseTitle,
@@ -172,7 +197,9 @@ class HomeScreen extends StatelessWidget {
       child: InkWell(
         onTap: () {
           selectedCourseId = id;
+          print(selectedCourseId);
           Navigator.pushNamed(context, '/courseScreen');
+// Navigate to course screen with course ID
         },
         splashColor: Colors.blue.withOpacity(0.2),
         borderRadius: BorderRadius.circular(15),
@@ -239,6 +266,19 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // Add Course Button
+  Widget _buildAddCourseButton(BuildContext context) {
+    return Center(
+      child: ElevatedButton.icon(
+        onPressed: () {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => AddCourseScreen())); // Navigate to Add Course Screen
+        },
+        icon: Icon(Icons.add),
+        label: Text("Add Course"),
       ),
     );
   }

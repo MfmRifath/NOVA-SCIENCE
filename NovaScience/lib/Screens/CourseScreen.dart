@@ -5,31 +5,31 @@ import '../Modals/CourseAndSectionAndVideos.dart';
 import '../Service/CourseProvider.dart';
 
 class CourseScreen extends StatefulWidget {
-  final int courseIndex;
-  final String courseId; // Changed to follow naming convention
+  final String courseId;
 
-  CourseScreen({required this.courseIndex, required this.courseId}); // Accept courseIndex as a parameter
+  CourseScreen({required this.courseId});
 
   @override
   _CourseScreenState createState() => _CourseScreenState();
 }
 
 class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMixin {
-  late YoutubePlayerController _youtubeController;
+  YoutubePlayerController? _youtubeController;
   late TabController _tabController;
+  Course? _course;
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _initializeYoutubePlayer();
     _tabController = TabController(length: 2, vsync: this);
+    _fetchCourseData();
   }
 
-  void _initializeYoutubePlayer() {
-    final courseProvider = Provider.of<CourseProvider>(context, listen: false);
-    var firstVideoUrl = courseProvider.courses[widget.courseIndex].sections!.first.videos.first.videoUrl;
-    String? videoId = YoutubePlayer.convertUrlToId(firstVideoUrl);
+  void _initializeYoutubePlayer(String? videoUrl) {
+    if (videoUrl == null || videoUrl.isEmpty) return;
 
+    String? videoId = YoutubePlayer.convertUrlToId(videoUrl);
     if (videoId != null) {
       _youtubeController = YoutubePlayerController(
         initialVideoId: videoId,
@@ -47,7 +47,7 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
 
   @override
   void dispose() {
-    _youtubeController.dispose();
+    _youtubeController?.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -55,20 +55,64 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
   void _playVideo(String videoUrl) {
     String? videoId = YoutubePlayer.convertUrlToId(videoUrl);
     if (videoId != null) {
-      _youtubeController.load(videoId);
+      _youtubeController!.load(videoId);
     } else {
       print("Invalid video URL");
     }
   }
 
+  Future<void> _fetchCourseData() async {
+    try {
+      final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+      _course = await courseProvider.getCourseById(widget.courseId);
+
+      setState(() {
+        isLoading = false;
+      });
+
+      if (_course != null && _course!.sections.isNotEmpty && _course!.sections.first.videos.isNotEmpty) {
+        _initializeYoutubePlayer(_course!.sections.first.videos.first.videoUrl);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Failed to load course data: $e'),
+        duration: Duration(seconds: 3),
+      ));
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  void _addVideoToSection(String courseId, String sectionTitle, String videoTitle, String videoUrl, BuildContext context) {
+    final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+    courseProvider.addVideoToSection(courseId, sectionTitle, Video(title: videoTitle, videoUrl: videoUrl));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final courseProvider = Provider.of<CourseProvider>(context);
-    final course = courseProvider.courses[widget.courseIndex]; // Access the specific course
+    if (isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Course Details')),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!(_youtubeController is YoutubePlayerController)) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Course Details')),
+        body: Column(
+          children: [
+            Center(child: Text('Video player not initialized')),
+            _buildSectionsList(_course!)
+          ],
+        ),
+      );
+    }
 
     return YoutubePlayerBuilder(
       player: YoutubePlayer(
-        controller: _youtubeController,
+        controller: _youtubeController!,
         showVideoProgressIndicator: true,
         onReady: () => print("Player is ready"),
         onEnded: (metaData) => print("Video has ended"),
@@ -76,22 +120,22 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
       builder: (context, player) {
         return Scaffold(
           appBar: AppBar(
-            title: Text(course.courseTitle!),
+            title: Text(_course!.courseTitle ?? 'Course Details'),
             backgroundColor: Colors.blueAccent,
             actions: [
               IconButton(
-                icon: Icon(Icons.edit),
-                onPressed: () => _showEditCourseDialog(context, course),
+                icon: Icon(Icons.edit, semanticLabel: 'Edit Course'),
+                onPressed: () => _showEditCourseDialog(context, _course!),
               ),
               IconButton(
-                icon: Icon(Icons.delete),
+                icon: Icon(Icons.delete, semanticLabel: 'Delete Course'),
                 onPressed: () {
-                  courseProvider.deleteCourse(course.id);
+                  Provider.of<CourseProvider>(context, listen: false).deleteCourse(_course!.id);
                   Navigator.pop(context);
                 },
               ),
               IconButton(
-                icon: Icon(Icons.add),
+                icon: Icon(Icons.add, semanticLabel: 'Add Section'),
                 onPressed: () => _showAddSectionDialog(context),
               ),
             ],
@@ -106,7 +150,10 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
                     tag: 'videoHero',
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16.0),
-                      child: player,
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: player,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -120,14 +167,19 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
                       Tab(text: "Lessons"),
                     ],
                   ),
-                  SizedBox(
-                    height: 500,
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildOverview(course), // Overview Tab
-                        _buildSectionsList(courseProvider), // Lessons Tab
-                      ],
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                    child: Expanded(
+                      child: SizedBox(
+                        height: 500, // To prevent scroll issues
+                        child: TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildOverview(_course!),
+                            _buildSectionsList(_course!),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -139,32 +191,24 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
     );
   }
 
-  // Overview Tab Content
   Widget _buildOverview(Course course) {
     return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           const Text(
             'Course Overview',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87),
           ),
           const SizedBox(height: 10),
           Text(
             'By ${course.instructor ?? "Instructor Name"}',
-            style: TextStyle(
-              fontSize: 18,
-              fontStyle: FontStyle.italic,
-              color: Colors.grey[700],
-            ),
+            style: TextStyle(fontSize: 18, fontStyle: FontStyle.italic, color: Colors.grey[700]),
           ),
           const SizedBox(height: 20),
           Text(
-            course.description!,
+            course.description ?? 'No description available.',
             style: TextStyle(fontSize: 16, height: 1.5),
           ),
           const SizedBox(height: 40),
@@ -173,21 +217,17 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
               children: [
                 Text(
                   '\$${course.price}',
-                  style: const TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
-                  ),
+                  style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.green),
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  '${course.duration ?? "Duration"}',
+                  '${course.duration ?? "Duration not specified"}',
                   style: TextStyle(fontSize: 18, color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 40),
                 ElevatedButton(
                   onPressed: () {
-                    // Handle 'Get Enroll' button press
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Enrollment coming soon!')));
                   },
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 20),
@@ -198,11 +238,7 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
                   ),
                   child: const Text(
                     'GET ENROLL',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ),
               ],
@@ -213,103 +249,115 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
     );
   }
 
-  // Lessons Tab Content with Sections and Videos
-  Widget _buildSectionsList(CourseProvider courseProvider) {
-    final course = courseProvider.courses[widget.courseIndex]; // Access the specific course
-    return ListView.builder(
-      itemCount: course.sections!.length,
-      itemBuilder: (context, sectionIndex) {
-        var section = course.sections![sectionIndex];
-        return Card(
-          elevation: 4,
-          margin: const EdgeInsets.symmetric(vertical: 8.0),
-          child: ExpansionTile(
-            title: Text(
-              section.sectionTitle,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-            children: [
-              ...section.videos.asMap().entries.map((entry) {
-                int videoIndex = entry.key; // Get the index of the video
-                var video = entry.value; // Get the video object
-                return ListTile(
-                  leading: Icon(Icons.play_circle_fill, color: Colors.blueAccent),
-                  title: Text(video.title),
-                  onTap: () {
-                    _playVideo(video.videoUrl);
-                  },
-                  trailing: IconButton(
-                    icon: Icon(Icons.delete, color: Colors.red),
-                    onPressed: () {
-                      // Delete the video using the videoIndex
-                      courseProvider.deleteVideo(widget.courseIndex, sectionIndex, videoIndex);
-                    },
-                  ),
-                );
-              }).toList(),
-              TextButton(
-                onPressed: () {
-                  _showAddVideoDialog(context, sectionIndex);
-                },
-                child: Text('Add Video'),
-              ),
-              TextButton(
-                onPressed: () {
-                  _showEditSectionDialog(context, sectionIndex);
-                },
-                child: Text('Edit Section'),
-              ),
-            ],
-          ),
-        );
-      },
+  Widget _buildSectionsList(Course course) {
+    if (course.sections.isEmpty) {
+      return Center(
+        child: TextButton(
+          onPressed: () => _showAddSectionDialog(context),
+          child: Text('Add Sections'),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 500.0,
+      child: ListView.builder(
+        itemCount: course.sections.length,
+        itemBuilder: (context, index) {
+          final section = course.sections[index];
+          return _buildSectionCard(section, index);
+        },
+      ),
     );
   }
 
-  // Show dialog to edit course
+  Widget _buildSectionCard(Section section, int sectionIndex) {
+    return Card(
+      elevation: 4,
+      margin: const EdgeInsets.symmetric(vertical: 8.0),
+      child: ExpansionTile(
+        title: Text(
+          section.sectionTitle,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        children: [
+          if (section.videos.isNotEmpty)
+            ...section.videos.map((video) => ListTile(
+              leading: Icon(Icons.play_circle_outline),
+              title: Text(video.title),
+              subtitle: Text('Click to play'),
+              onTap: () => _playVideo(video.videoUrl),
+            )).toList()
+          else
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Center(child: Text('No videos available')),
+            ),
+          TextButton(
+            onPressed: () => _showAddVideoDialog(widget.courseId, section.sectionTitle),
+            child: Text('Add Video'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showEditCourseDialog(BuildContext context, Course course) {
-    final titleController = TextEditingController(text: course.courseTitle);
-    final descriptionController = TextEditingController(text: course.description);
-    final priceController = TextEditingController(text: course.price.toString());
+    final TextEditingController titleController = TextEditingController(text: course.courseTitle);
+    final TextEditingController descriptionController = TextEditingController(text: course.description);
+    final TextEditingController priceController = TextEditingController(text: course.price.toString());
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('Edit Course'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: InputDecoration(labelText: 'Course Title'),
-              ),
-              TextField(
-                controller: descriptionController,
-                decoration: InputDecoration(labelText: 'Description'),
-              ),
-              TextField(
-                controller: priceController,
-                decoration: InputDecoration(labelText: 'Price'),
-                keyboardType: TextInputType.number,
-              ),
-            ],
+          title: const Text('Edit Course'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: InputDecoration(labelText: 'Course Title'),
+                ),
+                TextField(
+                  controller: descriptionController,
+                  decoration: InputDecoration(labelText: 'Course Description'),
+                  maxLines: 3,
+                ),
+                TextField(
+                  controller: priceController,
+                  decoration: InputDecoration(labelText: 'Course Price'),
+                  keyboardType: TextInputType.number,
+                ),
+
+              ],
+            ),
           ),
           actions: [
             TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
               onPressed: () {
-                Provider.of<CourseProvider>(context, listen: false).editCourse(
-                  widget.courseId,
-                  titleController.text,
-                  descriptionController.text,
-                  priceController.text as double,
-                );
-                Navigator.of(context).pop();
-              },
-              child: Text('Save'),
+                // Validate and save course details
+                if (titleController.text.isNotEmpty &&
+                    descriptionController.text.isNotEmpty &&
+                    priceController.text.isNotEmpty);
+                  // Update the course object with new values
+                  Provider.of<CourseProvider>(context, listen: false).editCourse(
+                    course.id!,
+                    titleController.text,
+                    descriptionController.text,
+                    double.parse(priceController.text),
+                  );
+
+                  // Dismiss the dialog
+                  Navigator.pop(context);
+                }
+              ,
+              child: const Text('Save'),
             ),
           ],
         );
@@ -317,106 +365,73 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
     );
   }
 
-  // Show dialog to add a section
+
   void _showAddSectionDialog(BuildContext context) {
-    final sectionTitleController = TextEditingController();
+    final _sectionTitleController = TextEditingController();
 
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Add Section'),
-          content: TextField(
-            controller: sectionTitleController,
-            decoration: InputDecoration(labelText: 'Section Title'),
+      builder: (context) => AlertDialog(
+        title: Text('Add Section'),
+        content: TextField(
+          controller: _sectionTitleController,
+          decoration: InputDecoration(labelText: 'Section Title', hintText: 'Enter section title'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              if (_sectionTitleController.text.isNotEmpty) {
+                final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+                courseProvider.addSection(widget.courseId,_sectionTitleController.text);
+                Navigator.pop(context);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please enter a section title')));
+              }
+            },
+            child: Text('Add Section'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Provider.of<CourseProvider>(context, listen: false).addSection(
-                  widget.courseId,
-                  sectionTitleController.text,
-                );
-                Navigator.of(context).pop();
-              },
-              child: Text('Add'),
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
   }
 
-  // Show dialog to add a video
-  void _showAddVideoDialog(BuildContext context, int sectionIndex) {
-    final videoTitleController = TextEditingController();
-    final videoUrlController = TextEditingController();
+  void _showAddVideoDialog(String courseId, String sectionTitle) {
+    final _videoTitleController = TextEditingController();
+    final _videoUrlController = TextEditingController();
 
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Add Video'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: videoTitleController,
-                decoration: InputDecoration(labelText: 'Video Title'),
-              ),
-              TextField(
-                controller: videoUrlController,
-                decoration: InputDecoration(labelText: 'Video URL'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Provider.of<CourseProvider>(context, listen: false).addVideo(
-                  widget.courseIndex,
-                  sectionIndex,
-                  videoTitleController.text,
-                  videoUrlController.text,
-                );
-                Navigator.of(context).pop();
-              },
-              child: Text('Add'),
+      builder: (context) => AlertDialog(
+        title: Text('Add Video to $sectionTitle'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _videoTitleController,
+              decoration: InputDecoration(labelText: 'Video Title', hintText: 'Enter video title'),
+            ),
+            TextField(
+              controller: _videoUrlController,
+              decoration: InputDecoration(labelText: 'Video URL', hintText: 'Enter valid YouTube URL'),
             ),
           ],
-        );
-      },
-    );
-  }
-
-  // Show dialog to edit section
-  void _showEditSectionDialog(BuildContext context, int sectionIndex) {
-    final sectionTitleController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Edit Section'),
-          content: TextField(
-            controller: sectionTitleController,
-            decoration: InputDecoration(labelText: 'Section Title'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              if (_videoTitleController.text.isNotEmpty && _videoUrlController.text.isNotEmpty) {
+                _addVideoToSection(courseId, sectionTitle, _videoTitleController.text, _videoUrlController.text, context);
+                Navigator.pop(context);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please fill out all fields')));
+              }
+            },
+            child: Text('Add Video'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Provider.of<CourseProvider>(context, listen: false).editSection(
-                  widget.courseIndex,
-                  sectionIndex,
-                  sectionTitleController.text,
-                );
-                Navigator.of(context).pop();
-              },
-              child: Text('Save'),
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
   }
 }

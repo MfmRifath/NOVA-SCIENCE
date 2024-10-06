@@ -72,6 +72,7 @@ class NovaScience extends StatelessWidget {
         WidgetBuilder builder = (context) => const ErrorScreen(); // Default value
 
         switch (settings.name) {
+
           case Routes.splash:
             builder = (context) => SplashScreen();
             break;
@@ -83,6 +84,9 @@ class NovaScience extends StatelessWidget {
             break;
           case Routes.homeScreen:
             builder = (context) => HomePage();
+            break;
+          case Routes.courseScreen:
+            builder= (context) => CourseScreen(courseId: selectedCourseId!);
             break;
           case Routes.editProfile:
             builder = (context) => EditProfileScreen();
@@ -105,17 +109,7 @@ class NovaScience extends StatelessWidget {
           case Routes.systemSettings:
             builder = (context) => SystemSettingsScreen();
             break;
-          case Routes.courseScreen:
-            final args = settings.arguments as Map<String, dynamic>? ?? {};
-            if (args.containsKey('courseIndex')) {
-              return MaterialPageRoute(
-                builder: (context) => CourseScreen(
-                  courseIndex: args['courseIndex'],
-                  courseId: args['courseId'], // Make sure to pass the correct courseId
-                ),
-              );
-            }
-            break; // Optional: break here for clarity
+           // Optional: break here for clarity
         }
         return MaterialPageRoute(builder: builder);
       },

@@ -1,25 +1,56 @@
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../Modals/CourseAndSectionAndVideos.dart'; // Import your Course model
 
 class CourseProvider with ChangeNotifier {
-  List<Course> _courses = []; // Holds all courses
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
+  bool hasError = false;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance; // Assuming Firebase
 
-  List<Course> get courses => _courses; // Getter for courses
+
 
   // Fetch courses from Firestore
   Future<void> fetchCourses() async {
     try {
       QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('courses').get();
-      _courses = snapshot.docs.map((doc) {
-        return Course.fromFirestore(doc.data() as DocumentSnapshot<Object?>)..id = doc.id;
-      }).toList();
+      // Removed _courses list functionality
       notifyListeners();
     } catch (e) {
+      hasError = true;
       print('Error fetching courses: $e');
+    }
+  }
+
+  // Fetch free courses from Firestore
+  Future<List<QueryDocumentSnapshot<Object?>>?> getFreeCourses() async {
+    try {
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('courses')
+          .where('status', isEqualTo: 'free') // Filtering by status
+          .get();
+      return snapshot.docs;
+      notifyListeners();
+    } catch (e) {
+      hasError = true;
+      print('Error fetching free courses: $e');
+    }
+  }
+
+  // Fetch my premium courses from Firestore
+  Future<List<QueryDocumentSnapshot<Object?>>?> getMyCourses() async {
+    try {
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('courses')
+          .where('status', isEqualTo: 'premium') // Filtering by status
+          .get();
+       return snapshot.docs;
+      notifyListeners();
+    } catch (e) {
+      hasError = true;
+      print('Error fetching premium courses: $e');
     }
   }
 
@@ -37,7 +68,7 @@ class CourseProvider with ChangeNotifier {
   }
 
   // Update the addCourse method to include image uploading
-  Future<void> addCourse({String? title, String? description, double? price, DateTime? startDate, DateTime? endDate, String? instructor, String? duration, String? imageUrl}) async {
+  Future<void> addCourse({String? title, String? description, double? price, DateTime? startDate, DateTime? endDate, String? instructor, String? duration, String? imageUrl, String? status}) async {
     // Create a new Course object
     Course newCourse = Course(
       courseTitle: title,
@@ -48,33 +79,30 @@ class CourseProvider with ChangeNotifier {
       instructor: instructor,
       duration: duration,
       imageUrl: imageUrl,
+      status: status,
       sections: [],
     );
 
     // Add course to Firestore and get the document ID
     try {
       DocumentReference docRef = await FirebaseFirestore.instance.collection('courses').add(newCourse.toMap());
-      newCourse.id = docRef.id;
-      _courses.add(newCourse);
+      // Removed _courses.add(newCourse) functionality
       notifyListeners();
     } catch (e) {
       print('Error adding course: $e');
     }
   }
+
   // Edit course method
-  Future<void> editCourse(String id, String title, String description, double price) async {
+  Future<void> editCourse(String id, String title, String description, double? price) async {
     try {
       await FirebaseFirestore.instance.collection('courses').doc(id).update({
         'courseTitle': title,
         'description': description,
-        'price': price,
+        'price': price ,
       });
 
-      // Update locally
-      final course = _courses.firstWhere((course) => course.id == id);
-      course.courseTitle = title;
-      course.description = description;
-      course.price = price;
+      // Removed local course update
       notifyListeners();
     } catch (e) {
       print('Error editing course: $e');
@@ -85,7 +113,7 @@ class CourseProvider with ChangeNotifier {
   Future<void> deleteCourse(String? id) async {
     try {
       await FirebaseFirestore.instance.collection('courses').doc(id).delete();
-      _courses.removeWhere((course) => course.id == id);
+      // Removed local course deletion
       notifyListeners();
     } catch (e) {
       print('Error deleting course: $e');
@@ -95,12 +123,11 @@ class CourseProvider with ChangeNotifier {
   // Add section to a course
   Future<void> addSection(String courseId, String title) async {
     try {
-      final course = _courses.firstWhere((course) => course.id == courseId);
+      // Removed local course retrieval
       Section newSection = Section(sectionTitle: title, videos: []);
-      course.sections!.add(newSection);
-
-      await FirebaseFirestore.instance.collection('courses').doc(course.id).update({
-        'sections': course.sections!.map((s) => s.toMap()).toList(),
+      // Assume that you will retrieve course sections here directly from Firestore instead
+      await FirebaseFirestore.instance.collection('courses').doc(courseId).update({
+        'sections': FieldValue.arrayUnion([newSection.toMap()]), // Update Firestore directly
       });
 
       notifyListeners();
@@ -110,13 +137,11 @@ class CourseProvider with ChangeNotifier {
   }
 
   // Edit section method
-  Future<void> editSection(int courseIndex, int sectionIndex, String newTitle) async {
+  Future<void> editSection(String courseId, int sectionIndex, String newTitle) async {
     try {
-      final course = _courses[courseIndex];
-      course.sections![sectionIndex].sectionTitle = newTitle;
-
-      await FirebaseFirestore.instance.collection('courses').doc(course.id).update({
-        'sections': course.sections!.map((s) => s.toMap()).toList(),
+      // Logic for editing the section should also directly update Firestore
+      await FirebaseFirestore.instance.collection('courses').doc(courseId).update({
+        'sections.$sectionIndex.sectionTitle': newTitle, // Update Firestore directly
       });
 
       notifyListeners();
@@ -126,13 +151,11 @@ class CourseProvider with ChangeNotifier {
   }
 
   // Delete section method
-  Future<void> deleteSection(int courseIndex, int sectionIndex) async {
+  Future<void> deleteSection(String courseId, int sectionIndex) async {
     try {
-      final course = _courses[courseIndex];
-      course.sections!.removeAt(sectionIndex);
-
-      await FirebaseFirestore.instance.collection('courses').doc(course.id).update({
-        'sections': course.sections!.map((s) => s.toMap()).toList(),
+      // Logic for deleting the section should also directly update Firestore
+      await FirebaseFirestore.instance.collection('courses').doc(courseId).update({
+        'sections': FieldValue.arrayRemove([/* add the section to remove */]), // Implement the correct logic here
       });
 
       notifyListeners();
@@ -142,20 +165,12 @@ class CourseProvider with ChangeNotifier {
   }
 
   // Add video to section
-  Future<void> addVideo(int courseIndex, int sectionIndex, String videoTitle, String videoUrl) async {
+  Future<void> addVideo(String courseId, int sectionIndex, String videoTitle, String videoUrl) async {
     try {
-      final course = _courses[courseIndex];
-
-      if (sectionIndex < 0 || sectionIndex >= course.sections!.length) {
-        print('Invalid section index');
-        return;
-      }
-
       Video newVideo = Video(title: videoTitle, videoUrl: videoUrl);
-      course.sections![sectionIndex].videos.add(newVideo);
 
-      await FirebaseFirestore.instance.collection('courses').doc(course.id).update({
-        'sections': course.sections!.map((s) => s.toMap()).toList(),
+      await FirebaseFirestore.instance.collection('courses').doc(courseId).update({
+        'sections.$sectionIndex.videos': FieldValue.arrayUnion([newVideo.toMap()]), // Update Firestore directly
       });
 
       notifyListeners();
@@ -165,19 +180,10 @@ class CourseProvider with ChangeNotifier {
   }
 
   // Delete video from section
-  Future<void> deleteVideo(int courseIndex, int sectionIndex, int videoIndex) async {
+  Future<void> deleteVideo(String courseId, int sectionIndex, int videoIndex) async {
     try {
-      final course = _courses[courseIndex];
-
-      if (sectionIndex < 0 || sectionIndex >= course.sections!.length) {
-        print('Invalid section index');
-        return;
-      }
-
-      course.sections![sectionIndex].videos.removeAt(videoIndex);
-
-      await FirebaseFirestore.instance.collection('courses').doc(course.id).update({
-        'sections': course.sections!.map((s) => s.toMap()).toList(),
+      await FirebaseFirestore.instance.collection('courses').doc(courseId).update({
+        'sections.$sectionIndex.videos': FieldValue.arrayRemove([/* add the video to remove */]), // Implement the correct logic here
       });
 
       notifyListeners();
@@ -187,12 +193,62 @@ class CourseProvider with ChangeNotifier {
   }
 
   // Get course by ID
-  Course? getCourseById(String id) {
+  Future<Course?> getCourseById(String courseId) async {
     try {
-      return _courses.firstWhere((course) => course.id == id);
+      DocumentSnapshot docSnapshot =
+      await FirebaseFirestore.instance.collection('courses').doc(courseId).get();
+
+      if (docSnapshot.exists) {
+        // Ensure the data is properly cast to Map<String, dynamic>
+        final data = docSnapshot.data() as Map<String, dynamic>?;
+
+        if (data != null) {
+          return Course.fromMap(data, courseId);
+        } else {
+          print('Course data is null for the given ID');
+          return null;
+        }
+      } else {
+        print('No course found with the given ID');
+        return null;
+      }
     } catch (e) {
-      print('Course with ID $id not found.');
+      print('Error getting course: $e');
       return null;
     }
   }
+  Future<void> updateCourse(Course course) async {
+    try {
+      await _firestore.collection('courses').doc(course.id).update(course.toMap()); // Assuming toMap method
+      notifyListeners(); // Notify listeners of the change
+    } catch (e) {
+      print('Failed to update course: $e');
+    }
+  }
+  Future<void> addVideoToSection(String courseId, String sectionTitle, Video video) async {
+    try {
+      // Fetch the course
+      Course? course = await getCourseById(courseId);
+
+      if (course != null) {
+        // Find the section by its title
+        Section? section = course.sections.firstWhere((sec) => sec.sectionTitle == sectionTitle);
+
+        if (section != null) {
+          // Add the video to the section
+          section.videos.add(video);
+
+          // Update the course with the new video added to the section
+          await updateCourse(course);
+        } else {
+          print('Section not found');
+        }
+      } else {
+        print('Course not found');
+      }
+    } catch (e) {
+      print('Failed to add video: $e');
+    }
+  }
 }
+
