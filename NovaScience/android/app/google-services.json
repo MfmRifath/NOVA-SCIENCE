@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "118096250417",
+    "project_id": "novascience-31488",
+    "storage_bucket": "novascience-31488.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:118096250417:android:38bfba3829b06d38d53710",
+        "android_client_info": {
+          "package_name": "com.NovaScience.nova_science"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfFK6mjHHGxmPyYfGq2srARJXgI5fPkz8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

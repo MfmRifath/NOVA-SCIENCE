@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:nova_science/Screens/AddCourseScreen.dart';
+import 'package:provider/provider.dart';
+import '../../Modals/CourseAndSectionAndVideos.dart';
+import '../../Service/CourseProvider.dart';
+
+String selectedCourseId = '';
 
 class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    // Access the CourseProvider
+    final courseProvider = Provider.of<CourseProvider>(context);
+    final courses = courseProvider.courses; // Assuming you have a 'courses' list
+
     return Scaffold(
       appBar: AppBar(
         title: Text("Welcome RN"),
@@ -16,7 +26,7 @@ class HomeScreen extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage('assets/images/background.jpg'), // Replace with your image URL
+                image: AssetImage('assets/images/background.jpg'),
                 fit: BoxFit.cover,
               ),
             ),
@@ -28,11 +38,12 @@ class HomeScreen extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withOpacity(0.9), // Semi-transparent black
-                  Colors.blue.shade400.withOpacity(0.7), // Semi-transparent blue
-                  Colors.purple.shade300.withOpacity(0.7), // Semi-transparent purple
+                  Colors.black.withOpacity(0.9),
+                  Colors.blue.shade400.withOpacity(0.7),
+                  Colors.purple.shade300.withOpacity(0.7),
                 ],
-              ),),
+              ),
+            ),
           ),
           SingleChildScrollView(
             child: Padding(
@@ -40,7 +51,6 @@ class HomeScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Search bar
                   _buildSearchBar(),
                   SizedBox(height: 30),
 
@@ -48,8 +58,10 @@ class HomeScreen extends StatelessWidget {
                   _buildSectionTitle("Free Watching"),
                   SizedBox(height: 15),
 
-                  // Horizontally Scrollable Course List
-                  _buildHorizontalCourseList(),
+                  // Horizontally Scrollable Course List or Add Video Button
+                  courses.isNotEmpty
+                      ? _buildHorizontalCourseList(courses: courses, context: context)
+                      : _buildAddVideoButton(context),
 
                   SizedBox(height: 30),
 
@@ -57,8 +69,10 @@ class HomeScreen extends StatelessWidget {
                   _buildSectionTitle("My Courses"),
                   SizedBox(height: 10),
 
-                  // Another Horizontal Course List
-                  _buildHorizontalCourseList(),
+                  // Horizontally Scrollable Course List or Add Course Button
+                  courses.isNotEmpty
+                      ? _buildHorizontalCourseList(courses: courses, context: context)
+                      : _buildAddCourseButton(context),
                 ],
               ),
             ),
@@ -103,36 +117,44 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHorizontalCourseList() {
+  // Add Course Button
+  Widget _buildAddCourseButton(BuildContext context) {
+
+    return Center(
+      child: ElevatedButton.icon(
+        onPressed: () {
+          Navigator.push(context, MaterialPageRoute(builder: (context)=> AddCourseScreen())); // Navigate to Add Course Screen
+        },
+        icon: Icon(Icons.add),
+        label: Text("Add Course"),
+      ),
+    );
+  }
+
+  // Add Video Button
+  Widget _buildAddVideoButton(BuildContext context) {
+    return Center(
+      child: ElevatedButton.icon(
+        onPressed: () {
+          Navigator.pushNamed(context, '/addVideoScreen'); // Navigate to Add Video Screen
+        },
+        icon: Icon(Icons.add),
+        label: Text("Add Video"),
+      ),
+    );
+  }
+
+  Widget _buildHorizontalCourseList({required List<Course> courses, required BuildContext context}) {
     return SingleChildScrollView(
-      scrollDirection: Axis.horizontal, // Enable horizontal scrolling
+      scrollDirection: Axis.horizontal,
       child: Row(
-        children: [
-          _buildAnimatedCourseCard(
-            courseTitle: "Freelancing",
-            description: "By Rifath",
-            time: "100 minutes Done",
-            imageUrl: "https://via.placeholder.com/150", // Network image URL
-          ),
-          _buildAnimatedCourseCard(
-            courseTitle: "UI/UX Design",
-            description: "By Mark",
-            time: "100 minutes Done",
-            imageUrl: "assets/images/background.jpg", // Asset image example
-          ),
-          _buildAnimatedCourseCard(
-            courseTitle: "Graphic Design",
-            description: "By Rifath",
-            time: "100 minutes Done",
-            imageUrl: "https://via.placeholder.com/150", // Network image URL
-          ),
-          _buildAnimatedCourseCard(
-            courseTitle: "Web Design",
-            description: "",
-            time: "100 minutes Done",
-            imageUrl: "assets/images/background.jpg", // Asset image example
-          ),
-        ],
+        children: courses.map((course) => _buildAnimatedCourseCard(
+          courseTitle: course.courseTitle!,
+          description: course.description!,
+          time: course.duration!,
+          imageUrl: course.imageUrl!,
+          context: context, id: course.id!,
+        )).toList(),
       ),
     );
   }
@@ -142,19 +164,22 @@ class HomeScreen extends StatelessWidget {
     required String description,
     required String time,
     required String imageUrl,
+    required String id,
+    required BuildContext context,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10.0), // Add horizontal padding between cards
+      padding: const EdgeInsets.symmetric(horizontal: 10.0),
       child: InkWell(
         onTap: () {
-          // Add your onTap logic here (navigate to course details)
+          selectedCourseId = id;
+          Navigator.pushNamed(context, '/courseScreen');
         },
         splashColor: Colors.blue.withOpacity(0.2),
         borderRadius: BorderRadius.circular(15),
         child: AnimatedContainer(
-          duration: Duration(milliseconds: 300), // Smooth animation duration
-          curve: Curves.easeInOut, // Apply smooth easing
-          width: 200, // Set fixed width to fit in horizontal scroll
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          width: 200,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(15),
             boxShadow: [
@@ -175,8 +200,21 @@ class HomeScreen extends StatelessWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
                   child: imageUrl.startsWith('http')
-                      ? Image.network(imageUrl, width: double.infinity, height: 120, fit: BoxFit.cover)
-                      : Image.asset(imageUrl, width: double.infinity, height: 120, fit: BoxFit.cover),
+                      ? Image.network(
+                    imageUrl,
+                    width: double.infinity,
+                    height: 120,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Center(child: Icon(Icons.error)); // Handle loading error
+                    },
+                  )
+                      : Image.asset(
+                    imageUrl,
+                    width: double.infinity,
+                    height: 120,
+                    fit: BoxFit.cover,
+                  ),
                 ),
                 Padding(
                   padding: const EdgeInsets.all(16.0),

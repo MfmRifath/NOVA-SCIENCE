@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../AdminPanal/AdminPanelScreen.dart';
 import 'HomeScreen.dart';
 import 'ProfileScreen.dart';
 import 'SettingScreen.dart';
@@ -9,7 +10,7 @@ class HomePage extends StatefulWidget {
   _HomePageState createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
 
   // List of pages to display
@@ -20,24 +21,42 @@ class _HomePageState extends State<HomePage> {
     AdminPanelScreen(), // Index 3
   ];
 
+  // Page controller for smoother transitions
+  PageController _pageController = PageController();
+
   // This method will handle page navigation
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
+    _pageController.animateToPage(
+      index,
+      duration: Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // The body is the selected page based on _selectedIndex
-      body: _pages[_selectedIndex],
+      // Use PageView for smooth page transitions
+      body: PageView(
+        controller: _pageController,
+        physics: NeverScrollableScrollPhysics(), // Disable swipe gestures
+        children: _pages,
+      ),
 
-      // Bottom Navigation Bar
+      // Bottom Navigation Bar with animated icon transitions
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
-        onTap: _onItemTapped, // Handle taps on navigation bar
+        onTap: _onItemTapped,
         selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey,
         items: const [
@@ -63,24 +82,4 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-
-
-
-
-
-class AdminPanelScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Admin Panel'),
-      ),
-      body: Center(
-        child: Text(
-          'This is the Admin Panel Screen',
-          style: TextStyle(fontSize: 24),
-        ),
-      ),
-    );
-  }
-}
+// Admin Panel Screen with Fade Transition

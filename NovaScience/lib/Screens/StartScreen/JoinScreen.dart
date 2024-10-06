@@ -124,7 +124,7 @@ class JoinScreen extends StatelessWidget {
                       Expanded(
                         child: ElevatedButton(
                           onPressed: () {
-                            // Handle Sign Up button press
+                            Navigator.pushNamed(context, '/signUp');
                           },
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(

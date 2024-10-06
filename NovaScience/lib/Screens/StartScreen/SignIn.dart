@@ -1,4 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -10,6 +14,11 @@ class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderSt
   late AnimationController _controller;
   late Animation<double> _fadeInAnimation;
   late Animation<Offset> _slideInAnimation;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   @override
   void initState() {
@@ -41,7 +50,90 @@ class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderSt
   @override
   void dispose() {
     _controller.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
+  }
+
+  // Sign in with Email and Password
+  // Helper method to update isLoggedin status in Firestore
+  Future<void> _updateLoginStatus(User user, bool isLoggedin) async {
+    try {
+      await _firestore.collection('users').doc(user.uid).update({'isLoggedin': isLoggedin});
+    } catch (e) {
+      print("Error updating login status: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update login status')),
+      );
+    }
+  }
+
+  // Sign in with Email and Password
+  Future<void> _signInWithEmail() async {
+    try {
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      // Update login status to true in Firestore
+      await _updateLoginStatus(userCredential.user!, true);
+
+      // Navigate to home screen
+      Navigator.pushNamed(context, '/homeScreen');
+    } catch (e) {
+      print("Error signing in with email and password: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to sign in with email')),
+      );
+    }
+  }
+
+  // Sign in with Google
+  Future<void> _signInWithGoogle() async {
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return; // User canceled the login
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      UserCredential userCredential = await _auth.signInWithCredential(credential);
+
+      // Update login status to true in Firestore
+      await _updateLoginStatus(userCredential.user!, true);
+
+      Navigator.pushNamed(context, '/homeScreen');
+    } catch (e) {
+      print("Error signing in with Google: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to sign in with Google')),
+      );
+    }
+  }
+
+  // Sign in with Facebook
+  Future<void> _signInWithFacebook() async {
+    try {
+      final LoginResult result = await FacebookAuth.instance.login();
+      if (result.status == LoginStatus.success) {
+        final OAuthCredential credential = FacebookAuthProvider.credential(result.accessToken!.tokenString);
+        UserCredential userCredential = await _auth.signInWithCredential(credential);
+
+        // Update login status to true in Firestore
+        await _updateLoginStatus(userCredential.user!, true);
+
+        Navigator.pushNamed(context, '/homeScreen');
+      }
+    } catch (e) {
+      print("Error signing in with Facebook: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to sign in with Facebook')),
+      );
+    }
   }
 
   @override
@@ -50,28 +142,23 @@ class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderSt
       appBar: AppBar(
         title: Text('Sign In'),
         centerTitle: true,
-        backgroundColor: Colors.teal, // App bar color
-        elevation: 0, // Removes the shadow under the app bar
+        backgroundColor: Colors.teal,
+        elevation: 0,
       ),
-      extendBodyBehindAppBar: true, // Extends the body to go under the app bar
+      extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Background Image
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage('assets/images/background.jpg'), // Add your background image here
+                image: AssetImage('assets/images/background.jpg'),
                 fit: BoxFit.cover,
               ),
             ),
           ),
-
-          // Dark Color Overlay with Opacity
           Container(
-            color: Colors.black.withOpacity(0.7), // Dark overlay color
+            color: Colors.black.withOpacity(0.7),
           ),
-
-          // Main Content
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: FadeTransition(
@@ -79,33 +166,29 @@ class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderSt
               child: SlideTransition(
                 position: _slideInAnimation,
                 child: Container(
-                  // Background color for the content area
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9), // White background with slight transparency
-                    borderRadius: BorderRadius.circular(12.0), // Rounded corners
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(12.0),
                   ),
-                  padding: const EdgeInsets.all(20.0), // Padding inside the content container
+                  padding: const EdgeInsets.all(20.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SizedBox(height: 40.0), // Space between app bar and logo
-
-                      // Add an image at the top
+                      SizedBox(height: 40.0),
                       Center(
                         child: Image.asset(
-                          'assets/images/logo.png', // Your logo or image file here
-                          width: 150, // Set the desired width
-                          height: 150, // Set the desired height
+                          'assets/images/logo.png',
+                          width: 150,
+                          height: 150,
                           fit: BoxFit.contain,
                         ),
                       ),
-                      SizedBox(height: 24.0), // Space between image and form
-
-                      // Email Field
+                      SizedBox(height: 24.0),
                       TextField(
+                        controller: _emailController,
                         decoration: InputDecoration(
                           labelText: 'Email',
-                          labelStyle: TextStyle(color: Colors.black), // Change label text color to black
+                          labelStyle: TextStyle(color: Colors.black),
                           focusedBorder: OutlineInputBorder(
                             borderSide: BorderSide(color: Colors.blueAccent, width: 2.0),
                           ),
@@ -113,15 +196,14 @@ class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderSt
                           prefixIcon: Icon(Icons.email, color: Colors.blueAccent),
                         ),
                         keyboardType: TextInputType.emailAddress,
-                        style: TextStyle(color: Colors.black), // Change text color to black
+                        style: TextStyle(color: Colors.black),
                       ),
                       SizedBox(height: 16.0),
-
-                      // Password Field
                       TextField(
+                        controller: _passwordController,
                         decoration: InputDecoration(
                           labelText: 'Password',
-                          labelStyle: TextStyle(color: Colors.black), // Change label text color to black
+                          labelStyle: TextStyle(color: Colors.black),
                           focusedBorder: OutlineInputBorder(
                             borderSide: BorderSide(color: Colors.blueAccent, width: 2.0),
                           ),
@@ -129,46 +211,36 @@ class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderSt
                           prefixIcon: Icon(Icons.lock, color: Colors.blueAccent),
                         ),
                         obscureText: true,
-                        style: TextStyle(color: Colors.black), // Change text color to black
+                        style: TextStyle(color: Colors.black),
                       ),
                       SizedBox(height: 8.0),
-
-                      // Forgot Password link
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
-                          onPressed: () {
-                            // Forgot password logic
-                          },
+                          onPressed: () {},
                           child: Text(
                             'Forgot Password?',
-                            style: TextStyle(color: Colors.blue), // Change text color to teal
+                            style: TextStyle(color: Colors.blue),
                           ),
                         ),
                       ),
                       SizedBox(height: 16.0),
-
-                      // Sign In Button
                       ElevatedButton(
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/homeScreen');
-                        },
+                        onPressed: _signInWithEmail,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 15.0),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12.0),
                           ),
-                          backgroundColor: Colors.blueAccent, // Change to teal
+                          backgroundColor: Colors.blueAccent,
                           elevation: 5,
                         ),
                         child: Text(
                           'SIGN IN',
-                          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold,color: Colors.white),
+                          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                       ),
                       SizedBox(height: 16.0),
-
-                      // Divider
                       Row(
                         children: <Widget>[
                           Expanded(child: Divider(thickness: 1.5, color: Colors.blue)),
@@ -177,22 +249,15 @@ class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderSt
                         ],
                       ),
                       SizedBox(height: 16.0),
-
-                      // Social Media Buttons
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           ElevatedButton.icon(
-                            onPressed: () {
-                              // Sign in with Facebook logic
-                            },
-                            icon: Icon(Icons.facebook,color: Colors.white,),
-                            label: Text('Facebook'
-                            ,style: TextStyle(
-                                color: Colors.white,
-                              ),),
+                            onPressed: _signInWithFacebook,
+                            icon: Icon(Icons.facebook, color: Colors.white),
+                            label: Text('Facebook', style: TextStyle(color: Colors.white)),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue[900], // Darker blue for Facebook
+                              backgroundColor: Colors.blue[900],
                               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12.0),
@@ -201,13 +266,11 @@ class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderSt
                           ),
                           SizedBox(width: 16.0),
                           ElevatedButton.icon(
-                            onPressed: () {
-                              // Sign in with Google logic
-                            },
-                            icon: Icon(FontAwesomeIcons.google,color: Colors.white,),
-                            label: Text('Google', style: TextStyle(color: Colors.white),),
+                            onPressed: _signInWithGoogle,
+                            icon: Icon(FontAwesomeIcons.google, color: Colors.white),
+                            label: Text('Google', style: TextStyle(color: Colors.white)),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green, // Orange for Google
+                              backgroundColor: Colors.green,
                               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12.0),
@@ -217,19 +280,17 @@ class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderSt
                         ],
                       ),
                       SizedBox(height: 16.0),
-
-                      // Sign Up link
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text("Don’t have an Account? ", style: TextStyle(color: Colors.blue)),
                           TextButton(
                             onPressed: () {
-                              // Sign Up logic
+                              Navigator.pushNamed(context, '/signUpScreen');
                             },
                             child: Text(
                               'Sign Up Here',
-                              style: TextStyle(color: Colors.blueAccent), // Match with the sign-in button
+                              style: TextStyle(color: Colors.blueAccent),
                             ),
                           ),
                         ],

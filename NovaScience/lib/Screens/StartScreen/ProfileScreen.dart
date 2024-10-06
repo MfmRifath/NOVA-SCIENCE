@@ -1,6 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-class ProfileScreen extends StatelessWidget {
+import '../../Service/AuthService.dart';
+
+
+
+class ProfileScreen extends StatefulWidget {
+  @override
+  _ProfileScreenState createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final AuthService _authService = AuthService();
+  Map<String, dynamic>? userData;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserData();
+  }
+
+  Future<void> _fetchUserData() async {
+    User? user = _authService.currentUser;
+    if (user != null) {
+      userData = await _authService.getUserData(user.uid);
+    }
+    setState(() {
+      isLoading = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -19,7 +50,7 @@ class ProfileScreen extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
-                image:AssetImage('assets/images/background.jpg'),// Replace with your background image URL
+                image: AssetImage('assets/images/background.jpg'), // Replace with your background image URL
                 fit: BoxFit.cover,
               ),
             ),
@@ -38,28 +69,19 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
           ),
-          SingleChildScrollView(
+          isLoading
+              ? Center(child: CircularProgressIndicator()) // Loader while data is loading
+              : SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 SizedBox(height: 30),
-
-                // Profile Picture with Animated Hover Effect
-                _buildProfileImage(context),
-
+                _buildProfileImage(),
                 SizedBox(height: 20),
-
-                // Name and Bio Section with Animation
                 _buildProfileDetails(),
-
                 SizedBox(height: 30),
-
-                // Action Buttons with Animations
                 _buildActionButtons(context),
-
                 SizedBox(height: 30),
-
-                // Additional Information List with Staggered Animations
                 _buildProfileInfoList(),
               ],
             ),
@@ -69,8 +91,8 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // Profile image with hover effect
-  Widget _buildProfileImage(BuildContext context) {
+  // Profile image
+  Widget _buildProfileImage() {
     return Center(
       child: GestureDetector(
         onTap: () {
@@ -98,7 +120,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // Profile name and bio with smooth animation
+  // Profile name and bio
   Widget _buildProfileDetails() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -106,7 +128,7 @@ class ProfileScreen extends StatelessWidget {
         FadeInAnimation(
           key: ValueKey(1),
           child: Text(
-            'John Doe',
+            userData?['name'] ?? 'John Doe', // Using user data
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -118,7 +140,7 @@ class ProfileScreen extends StatelessWidget {
         FadeInAnimation(
           key: ValueKey(2),
           child: Text(
-            'UI/UX Designer | Flutter Enthusiast',
+            userData?['bio'] ?? 'UI/UX Designer | Flutter Enthusiast', // Using user data
             style: TextStyle(
               fontSize: 16,
               color: Colors.white70,
@@ -129,7 +151,7 @@ class ProfileScreen extends StatelessWidget {
         FadeInAnimation(
           key: ValueKey(3),
           child: Text(
-            'I love designing and building beautiful apps that scale!',
+            userData?['description'] ?? 'I love designing and building beautiful apps that scale!', // Using user data
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
@@ -141,7 +163,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // Action buttons (Edit Profile, Settings) with animations
+  // Action buttons
   Widget _buildActionButtons(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -153,19 +175,22 @@ class ProfileScreen extends StatelessWidget {
             Navigator.pushNamed(context, '/editProfile');
           },
         ),
-        SizedBox(width: 20),
-        _buildProfileButton(
-          icon: Icons.settings,
-          label: "Settings",
-          onTap: () {
-            // Add your Settings logic here
-          },
-        ),
+    SizedBox(width: 20),
+    _buildProfileButton(
+    icon: Icons.logout,
+    label: "Sign Out",
+    onTap: _signOut, // Sign out functionality
+    ),
+
       ],
     );
   }
-
-  // Custom button widget with ripple effect and hover animation
+// Sign-out functionality
+  Future<void> _signOut() async {
+    await _authService.signOut();
+    Navigator.of(context).pushReplacementNamed('/join'); // Navigate to login screen after sign out
+  }
+  // Custom button widget
   Widget _buildProfileButton({required IconData icon, required String label, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -202,7 +227,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // List of profile info (email, phone number, etc.) with staggered animations
+  // List of profile info
   Widget _buildProfileInfoList() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -211,22 +236,22 @@ class ProfileScreen extends StatelessWidget {
         children: [
           StaggeredFadeInAnimation(
             key: ValueKey(4),
-            child: _buildProfileInfoItem(Icons.email, "Email", "johndoe@example.com"),
+            child: _buildProfileInfoItem(Icons.email, "Email", userData?['email'] ?? "johndoe@example.com"),
           ),
           Divider(color: Colors.white54),
           StaggeredFadeInAnimation(
             key: ValueKey(5),
-            child: _buildProfileInfoItem(Icons.phone, "Phone", "+123 456 7890"),
+            child: _buildProfileInfoItem(Icons.phone, "Phone", userData?['phoneNumber'] ?? "+123 456 7890"),
           ),
           Divider(color: Colors.white54),
           StaggeredFadeInAnimation(
             key: ValueKey(6),
-            child: _buildProfileInfoItem(Icons.location_on, "Location", "San Francisco, CA"),
+            child: _buildProfileInfoItem(Icons.location_on, "Location", userData?['location'] ?? "San Francisco, CA"),
           ),
           Divider(color: Colors.white54),
           StaggeredFadeInAnimation(
             key: ValueKey(7),
-            child: _buildProfileInfoItem(Icons.cake, "Birthday", "January 1, 1990"),
+            child: _buildProfileInfoItem(Icons.cake, "Birthday", userData?['birthday'] ?? "January 1, 1990"),
           ),
           Divider(color: Colors.white54),
         ],
@@ -263,16 +288,18 @@ class ProfileScreen extends StatelessWidget {
 }
 
 // Custom Fade-in Animation widget
+// Custom Fade-in Animation widget
 class FadeInAnimation extends StatelessWidget {
   final Widget child;
 
-  FadeInAnimation({required Key key, required this.child}) : super(key: key);
+  // Constructor takes a Key and the child widget
+  const FadeInAnimation({Key? key, required this.child}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return TweenAnimationBuilder(
       tween: Tween<double>(begin: 0, end: 1),
-      duration: Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 500), // Animation duration
       builder: (context, value, child) {
         return Opacity(
           opacity: value,
@@ -284,17 +311,18 @@ class FadeInAnimation extends StatelessWidget {
   }
 }
 
-// Custom Staggered Fade-in Animation widget
+// Custom Staggered Fade-in Animation widget (without delay)
 class StaggeredFadeInAnimation extends StatelessWidget {
   final Widget child;
 
-  StaggeredFadeInAnimation({required Key key, required this.child}) : super(key: key);
+  // Constructor takes a Key and the child widget
+  const StaggeredFadeInAnimation({Key? key, required this.child}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return TweenAnimationBuilder(
       tween: Tween<double>(begin: 0, end: 1),
-      duration: Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 500), // Animation duration
       builder: (context, value, child) {
         return Opacity(
           opacity: value,
@@ -305,3 +333,4 @@ class StaggeredFadeInAnimation extends StatelessWidget {
     );
   }
 }
+
