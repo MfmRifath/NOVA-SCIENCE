@@ -137,32 +137,70 @@ class CourseProvider with ChangeNotifier {
   }
 
   // Edit section method
-  Future<void> editSection(String courseId, int sectionIndex, String newTitle) async {
+  // Edit section method
+  Future<void> editSection(String courseId, String oldTitle, String newTitle) async {
     try {
-      // Logic for editing the section should also directly update Firestore
-      await FirebaseFirestore.instance.collection('courses').doc(courseId).update({
-        'sections.$sectionIndex.sectionTitle': newTitle, // Update Firestore directly
-      });
+      // Fetch the course
+      Course? course = await getCourseById(courseId);
 
-      notifyListeners();
+      if (course != null) {
+        // Find the section to edit
+        Section? section = course.sections.firstWhere((sec) => sec.sectionTitle == oldTitle);
+
+        if (section != null) {
+          // Update the section title
+          section.sectionTitle = newTitle;
+
+          // Update Firestore with the modified course data
+          await updateCourse(course);
+
+          notifyListeners();
+        } else {
+          print('Section not found');
+        }
+      } else {
+        print('Course not found');
+      }
     } catch (e) {
-      print('Error editing section: $e');
+      print('Failed to edit section: $e');
     }
   }
 
   // Delete section method
-  Future<void> deleteSection(String courseId, int sectionIndex) async {
+  // Delete section method
+  Future<void> deleteSection(String courseId, String sectionTitle) async {
     try {
-      // Logic for deleting the section should also directly update Firestore
-      await FirebaseFirestore.instance.collection('courses').doc(courseId).update({
-        'sections': FieldValue.arrayRemove([/* add the section to remove */]), // Implement the correct logic here
-      });
+      // Fetch the course
+      Course? course = await getCourseById(courseId);
 
-      notifyListeners();
+      if (course != null) {
+        // Find the section to delete, handle the case where it might not be found
+        Section? section = course.sections.firstWhere(
+              (sec) => sec.sectionTitle == sectionTitle, // Use orElse to avoid an exception
+        );
+
+        if (section != null) {
+          // Remove the section from the course
+          course.sections.remove(section);
+
+          // Update Firestore with the new sections array
+          await updateCourse(course);
+
+          // Notify listeners to update the UI
+          notifyListeners();
+        } else {
+          print('Section "$sectionTitle" not found in course "$courseId".');
+        }
+      } else {
+        print('Course with ID "$courseId" not found.');
+      }
     } catch (e) {
-      print('Error deleting section: $e');
+      print('Failed to delete section: $e');
+      // Optionally, you could rethrow the error or handle it in another way
+      // throw e; // Uncomment this line if you want to propagate the error
     }
   }
+
 
   // Add video to section
   Future<void> addVideo(String courseId, int sectionIndex, String videoTitle, String videoUrl) async {
@@ -180,17 +218,34 @@ class CourseProvider with ChangeNotifier {
   }
 
   // Delete video from section
-  Future<void> deleteVideo(String courseId, int sectionIndex, int videoIndex) async {
+  // Delete video method
+  Future<void> deleteVideo(String courseId, String sectionTitle, int videoIndex) async {
     try {
-      await FirebaseFirestore.instance.collection('courses').doc(courseId).update({
-        'sections.$sectionIndex.videos': FieldValue.arrayRemove([/* add the video to remove */]), // Implement the correct logic here
-      });
+      // Fetch the course
+      Course? course = await getCourseById(courseId);
 
-      notifyListeners();
+      if (course != null) {
+        // Find the section
+        Section? section = course.sections.firstWhere((sec) => sec.sectionTitle == sectionTitle);
+
+        if (section != null && videoIndex >= 0 && videoIndex < section.videos.length) {
+          // Remove the video from the section
+          section.videos.removeAt(videoIndex);
+
+          // Update Firestore with the modified course data
+          await updateCourse(course);
+          notifyListeners();
+        } else {
+          print('Invalid video index or section not found');
+        }
+      } else {
+        print('Course not found');
+      }
     } catch (e) {
-      print('Error deleting video: $e');
+      print('Failed to delete video: $e');
     }
   }
+
 
   // Get course by ID
   Future<Course?> getCourseById(String courseId) async {
@@ -250,5 +305,36 @@ class CourseProvider with ChangeNotifier {
       print('Failed to add video: $e');
     }
   }
+  // Edit video method
+  // Edit video method
+  Future<void> editVideo(String courseId, String sectionTitle, int videoIndex, String newTitle, String newUrl) async {
+    try {
+      // Fetch the course
+      Course? course = await getCourseById(courseId);
+
+      if (course != null) {
+        // Find the section
+        Section? section = course.sections.firstWhere((sec) => sec.sectionTitle == sectionTitle);
+
+        if (section != null && videoIndex >= 0 && videoIndex < section.videos.length) {
+          // Update the video details
+          section.videos[videoIndex].title = newTitle;
+          section.videos[videoIndex].videoUrl = newUrl;
+
+          // Update Firestore with the modified course data
+          await updateCourse(course);
+          notifyListeners();
+        } else {
+          print('Invalid video index or section not found');
+        }
+      } else {
+        print('Course not found');
+      }
+    } catch (e) {
+      print('Failed to edit video: $e');
+    }
+  }
+
+
 }
 
