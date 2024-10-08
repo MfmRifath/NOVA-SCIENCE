@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:provider/provider.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import '../Modals/CourseAndSectionAndVideos.dart';
@@ -18,6 +19,8 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
   late TabController _tabController;
   Course? _course;
   bool isLoading = true;
+  bool isActionLoading = false; // For indicating loading in dialog actions
+
 
   @override
   void initState() {
@@ -109,7 +112,7 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
     if (isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Course Details')),
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: SpinKitDoubleBounce(color: Colors.white,)),
       );
     }
 
@@ -359,6 +362,8 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
     final TextEditingController titleController = TextEditingController(text: course.courseTitle);
     final TextEditingController descriptionController = TextEditingController(text: course.description);
     final TextEditingController priceController = TextEditingController(text: course.price.toString());
+    final TextEditingController subjectController = TextEditingController(text: course.subject);
+
 
     showDialog(
       context: context,
@@ -383,6 +388,10 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
                   decoration: InputDecoration(labelText: 'Course Price'),
                   keyboardType: TextInputType.number,
                 ),
+                TextField(
+                  controller: subjectController,
+                  decoration: InputDecoration(labelText: 'subject'),
+                ),
 
               ],
             ),
@@ -404,6 +413,7 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
                     titleController.text,
                     descriptionController.text,
                     double.parse(priceController.text),
+                    subjectController.text,
                   );
 
                   // Dismiss the dialog
@@ -424,30 +434,37 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Add Section'),
-        content: TextField(
-          controller: _sectionTitleController,
-          decoration: InputDecoration(labelText: 'Section Title', hintText: 'Enter section title'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              if (_sectionTitleController.text.isNotEmpty) {
-                final courseProvider = Provider.of<CourseProvider>(context, listen: false);
-                courseProvider.addSection(widget.courseId,_sectionTitleController.text);
-                Navigator.pop(context);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please enter a section title')));
-              }
-            },
-            child: Text('Add Section'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Add Section'),
+          content: TextField(
+            controller: _sectionTitleController,
+            decoration: InputDecoration(labelText: 'Section Title', hintText: 'Enter section title'),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+            TextButton(
+              onPressed: () async {
+                if (_sectionTitleController.text.isNotEmpty) {
+                  setState(() => isActionLoading = true); // Start loading
+                  final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+                  await courseProvider.addSection(widget.courseId, _sectionTitleController.text);
+                  setState(() => isActionLoading = false); // End loading
+                  Navigator.pop(context);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please enter a section title')));
+                }
+              },
+              child: isActionLoading
+                  ? CircularProgressIndicator() // Show loader during the action
+                  : Text('Add Section'),
+            ),
+          ],
+        ),
       ),
     );
   }
+
 
   void _showAddVideoDialog(String courseId, String sectionTitle) {
     final _videoTitleController = TextEditingController();
@@ -455,67 +472,81 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Add Video to $sectionTitle'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _videoTitleController,
-              decoration: InputDecoration(labelText: 'Video Title', hintText: 'Enter video title'),
-            ),
-            TextField(
-              controller: _videoUrlController,
-              decoration: InputDecoration(labelText: 'Video URL', hintText: 'Enter valid YouTube URL'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Add Video to $sectionTitle'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _videoTitleController,
+                decoration: InputDecoration(labelText: 'Video Title', hintText: 'Enter video title'),
+              ),
+              TextField(
+                controller: _videoUrlController,
+                decoration: InputDecoration(labelText: 'Video URL', hintText: 'Enter valid YouTube URL'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+            TextButton(
+              onPressed: () async {
+                if (_videoTitleController.text.isNotEmpty && _videoUrlController.text.isNotEmpty) {
+                  setState(() => isActionLoading = true); // Start loading
+                  _addVideoToSection(courseId, sectionTitle, _videoTitleController.text, _videoUrlController.text, context);
+                  setState(() => isActionLoading = false); // End loading
+                  Navigator.pop(context);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please fill out all fields')));
+                }
+              },
+              child: isActionLoading
+                  ? SpinKitDoubleBounce(color: Colors.white,) // Show loader during the action
+                  : Text('Add Video'),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              if (_videoTitleController.text.isNotEmpty && _videoUrlController.text.isNotEmpty) {
-                _addVideoToSection(courseId, sectionTitle, _videoTitleController.text, _videoUrlController.text, context);
-                Navigator.pop(context);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please fill out all fields')));
-              }
-            },
-            child: Text('Add Video'),
-          ),
-        ],
       ),
     );
   }
+
   void _showEditSectionDialog(Section section, int sectionIndex) {
     final _sectionTitleController = TextEditingController(text: section.sectionTitle);
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Edit Section'),
-        content: TextField(
-          controller: _sectionTitleController,
-          decoration: InputDecoration(labelText: 'Section Title', hintText: 'Enter new section title'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              if (_sectionTitleController.text.isNotEmpty) {
-                final courseProvider = Provider.of<CourseProvider>(context, listen: false);
-                courseProvider.editSection(widget.courseId, section.sectionTitle, _sectionTitleController.text);
-                Navigator.pop(context);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please enter a section title')));
-              }
-            },
-            child: Text('Save'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Edit Section'),
+          content: TextField(
+            controller: _sectionTitleController,
+            decoration: InputDecoration(labelText: 'Section Title', hintText: 'Enter new section title'),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+            TextButton(
+              onPressed: () async {
+                if (_sectionTitleController.text.isNotEmpty) {
+                  setState(() => isActionLoading = true); // Start loading
+                  final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+                  await courseProvider.editSection(widget.courseId, section.sectionTitle, _sectionTitleController.text);
+                  setState(() => isActionLoading = false); // End loading
+                  Navigator.pop(context);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please enter a section title')));
+                }
+              },
+              child: isActionLoading
+                  ? SpinKitDoubleBounce(color: Colors.white,)  // Show loader during the action
+                  : Text('Save'),
+            ),
+          ],
+        ),
       ),
     );
   }
+
   void _showEditVideoDialog(String sectionTitle, Video video, int videoIndex) {
     final _videoTitleController = TextEditingController(text: video.title);
     final _videoUrlController = TextEditingController(text: video.videoUrl);
@@ -559,30 +590,35 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Delete Section'),
-          content: Text('Are you sure you want to delete this section?'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // Close the dialog
-              },
-              child: Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                _deleteSection(sectionIndex, section); // Proceed to delete the section
-                Navigator.of(context).pop(); // Close the dialog
-              },
-              child: Text('Delete'),
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: Text('Delete Section'),
+            content: Text('Are you sure you want to delete this section?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(), // Close the dialog
+                child: Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  setState(() => isActionLoading = true); // Start loading
+                  _deleteSection(sectionIndex, section); // Proceed to delete the section
+                  setState(() => isActionLoading = false); // End loading
+                  Navigator.of(context).pop(); // Close the dialog
+                },
+                child: isActionLoading
+                    ? SpinKitDoubleBounce(color: Colors.white,)  // Show loader during the action
+                    : Text('Delete'),
+              ),
+            ],
+          ),
         );
       },
     );
   }
 
-  
+
+
 
 
 

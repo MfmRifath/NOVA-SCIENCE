@@ -4,7 +4,9 @@ import 'package:nova_science/Screens/AddCourseScreen.dart';
 import 'package:provider/provider.dart';
 import '../../Modals/CourseAndSectionAndVideos.dart';
 import '../../Service/CourseProvider.dart';
+
 String? selectedCourseId;
+
 class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -57,56 +59,18 @@ class HomeScreen extends StatelessWidget {
                   // Free Watching Section
                   _buildSectionTitle("Free Watching"),
                   SizedBox(height: 15),
-
-                  // Display loader or the courses
-                  if (isLoading)
-                    Center(child: CircularProgressIndicator())
-                  else if (hasError)
-                    Center(child: Text("Failed to load courses. Please try again.", style: TextStyle(color: Colors.red)))
-                  else
-                    FutureBuilder<List<DocumentSnapshot<Object?>>?>(
-                      future: courseProvider.getFreeCourses(), // Ensure this returns a Future
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return Center(child: CircularProgressIndicator());
-                        }
-                        if (snapshot.hasError) {
-                          return Center(child: Text("Failed to load courses.", style: TextStyle(color: Colors.red)));
-                        }
-                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                          return Center(child: Text("No courses available.")); // Handle empty courses list
-                        }
-                        return _buildCoursesList(snapshot.data!, context);
-                      },
-                    ),
+                  _buildCourseLoader(
+                    isLoading,
+                    hasError,
+                    courseProvider.getFreeCourses(),
+                  ),
 
                   SizedBox(height: 30),
 
                   // My Courses Section
                   _buildSectionTitle("My Courses"),
                   SizedBox(height: 10),
-
-                  // Display loader or the courses
-                  if (isLoading)
-                    Center(child: CircularProgressIndicator())
-                  else if (hasError)
-                    Center(child: Text("Failed to load courses. Please try again.", style: TextStyle(color: Colors.red)))
-                  else
-                    FutureBuilder<List<DocumentSnapshot<Object?>>?>(
-                      future: courseProvider.getMyCourses(), // Ensure this returns a Future
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return Center(child: CircularProgressIndicator());
-                        }
-                        if (snapshot.hasError) {
-                          return Center(child: Text("Failed to load courses.", style: TextStyle(color: Colors.red)));
-                        }
-                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                          return Center(child: Text("No courses available.")); // Handle empty courses list
-                        }
-                        return _buildCoursesList(snapshot.data!, context);
-                      },
-                    ),
+                  _buildMyCoursesSection(courseProvider, context),
 
                   SizedBox(height: 30),
                   _buildAddCourseButton(context), // Move Add Course button outside of the course lists
@@ -154,7 +118,94 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCoursesList(List<DocumentSnapshot<Object?>> courses, BuildContext context) {
+  Widget _buildCourseLoader(bool isLoading, bool hasError, Future<List<QueryDocumentSnapshot<Object?>>?>? futureCourses) {
+    if (isLoading) {
+      return Center(child: CircularProgressIndicator());
+    } else if (hasError) {
+      return Center(
+        child: Text("Failed to load courses. Please try again.", style: TextStyle(color: Colors.red)),
+      );
+    } else {
+      // Ensure the future is non-null and convert to the correct type
+      Future<List<QueryDocumentSnapshot<Object?>>> nonNullableFutureCourses = futureCourses?.then(
+            (value) => value ?? <QueryDocumentSnapshot<Object?>>[], // Handle null future or null result by returning an empty list
+      ) ?? Future.value(<QueryDocumentSnapshot<Object?>>[]); // Default to an empty list if futureCourses is null
+
+      return FutureBuilder<List<QueryDocumentSnapshot<Object?>>>(
+        future: nonNullableFutureCourses,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Text("Failed to load courses.", style: TextStyle(color: Colors.red)),
+            );
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(child: Text("No courses available."));
+          }
+          return _buildCoursesList(snapshot.data!, context);
+        },
+      );
+    }
+  }
+
+
+  Widget _buildMyCoursesSection(CourseProvider courseProvider, BuildContext context) {
+    return FutureBuilder<List<QueryDocumentSnapshot<Object?>>?>(
+      future: courseProvider.getMyCourses(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text("Failed to load courses.", style: TextStyle(color: Colors.red)),
+          );
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(child: Text("No courses available."));
+        }
+
+        // Group courses by subject
+        Map<String, List<QueryDocumentSnapshot<Object?>>> coursesBySubject = {};
+        for (var course in snapshot.data!) {
+          final data = course.data() as Map<String, dynamic>?;
+          final subject = data?['subject'] ?? 'Uncategorized';
+
+          if (!coursesBySubject.containsKey(subject)) {
+            coursesBySubject[subject] = [];
+          }
+          coursesBySubject[subject]!.add(course);
+        }
+
+        // Build the UI for each subject
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: coursesBySubject.entries.map((entry) {
+            final subject = entry.key;
+            final courses = entry.value;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  subject,
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                SizedBox(height: 10),
+                _buildCoursesList(courses, context),
+                SizedBox(height: 20),
+              ],
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildCoursesList(List<QueryDocumentSnapshot<Object?>> courses, BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -167,6 +218,7 @@ class HomeScreen extends StatelessWidget {
           // Use null-aware operators to provide default values if necessary
           final courseTitle = data['courseTitle'] ?? 'Untitled Course';
           final description = data['description'] ?? 'No description available.';
+          final instructor = data['instructor'] ?? 'No description available.';
           final time = data['duration'] ?? 'Duration not specified';
           final imageUrl = data['imageUrl'] ?? 'assets/images/default_image.jpg'; // Provide a default image URL
 
@@ -177,17 +229,18 @@ class HomeScreen extends StatelessWidget {
             imageUrl: imageUrl,
             context: context,
             id: course.id,
+            instructor: instructor,
           );
         }).toList(),
       ),
     );
   }
 
-
   Widget _buildAnimatedCourseCard({
     required String courseTitle,
     required String description,
     required String time,
+    required String instructor,
     required String imageUrl,
     required String id,
     required BuildContext context,
@@ -199,7 +252,6 @@ class HomeScreen extends StatelessWidget {
           selectedCourseId = id;
           print(selectedCourseId);
           Navigator.pushNamed(context, '/courseScreen');
-// Navigate to course screen with course ID
         },
         splashColor: Colors.blue.withOpacity(0.2),
         borderRadius: BorderRadius.circular(15),
@@ -253,6 +305,8 @@ class HomeScreen extends StatelessWidget {
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       SizedBox(height: 8),
+                      Text(instructor),
+                      SizedBox(height: 8),
                       Text(description),
                       SizedBox(height: 8),
                       Text(
@@ -272,14 +326,13 @@ class HomeScreen extends StatelessWidget {
 
   // Add Course Button
   Widget _buildAddCourseButton(BuildContext context) {
-    return Center(
-      child: ElevatedButton.icon(
-        onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => AddCourseScreen())); // Navigate to Add Course Screen
-        },
-        icon: Icon(Icons.add),
-        label: Text("Add Course"),
-      ),
+    return ElevatedButton(
+      onPressed: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => AddCourseScreen()),
+        );
+      },
+      child: Text("Add Course"),
     );
   }
 }

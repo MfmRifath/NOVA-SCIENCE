@@ -68,7 +68,7 @@ class CourseProvider with ChangeNotifier {
   }
 
   // Update the addCourse method to include image uploading
-  Future<void> addCourse({String? title, String? description, double? price, DateTime? startDate, DateTime? endDate, String? instructor, String? duration, String? imageUrl, String? status}) async {
+  Future<void> addCourse({String? title, String? description, double? price, DateTime? startDate, DateTime? endDate, String? instructor, String? duration, String? imageUrl, String? status, String? subject}) async {
     // Create a new Course object
     Course newCourse = Course(
       courseTitle: title,
@@ -81,6 +81,7 @@ class CourseProvider with ChangeNotifier {
       imageUrl: imageUrl,
       status: status,
       sections: [],
+      subject: subject,
     );
 
     // Add course to Firestore and get the document ID
@@ -94,12 +95,13 @@ class CourseProvider with ChangeNotifier {
   }
 
   // Edit course method
-  Future<void> editCourse(String id, String title, String description, double? price) async {
+  Future<void> editCourse(String id, String title, String description, double? price, String subject) async {
     try {
       await FirebaseFirestore.instance.collection('courses').doc(id).update({
         'courseTitle': title,
         'description': description,
         'price': price ,
+        'subject':subject,
       });
 
       // Removed local course update

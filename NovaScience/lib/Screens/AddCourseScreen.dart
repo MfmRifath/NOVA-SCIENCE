@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io'; // Import to use File
+import 'dart:io';
 import '../../Service/CourseProvider.dart';
 
 class AddCourseScreen extends StatefulWidget {
@@ -17,10 +17,11 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
   double? _price;
   String? _instructor;
   String? _status;
-  File? _imageFile; // Store the selected image
-  bool _isLoading = false; // Loading state
+  String? _subject;
+  File? _imageFile;
+  bool _isLoading = false;
 
-  final ImagePicker _picker = ImagePicker(); // Image picker instance
+  final ImagePicker _picker = ImagePicker();
 
   @override
   Widget build(BuildContext context) {
@@ -31,23 +32,18 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background image
-          Image.asset(
-            'assets/images/background.jpg', // Replace with your background image path
-            fit: BoxFit.cover,
-          ),
-          // White overlay with opacity
-          Container(
-            color: Colors.white.withOpacity(0.7),
-          ),
-          // Main content
+          _buildBackground(),
+          Container(color: Colors.white.withOpacity(0.85)),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Form(
               key: _formKey,
               child: SingleChildScrollView(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildTitle("Add New Course"),
+                    SizedBox(height: 16),
                     _buildTextField(
                       label: 'Course Title',
                       onSaved: (value) => _courseTitle = value,
@@ -59,6 +55,11 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                       validator: (value) => value!.isEmpty ? 'Please enter the status' : null,
                     ),
                     _buildTextField(
+                      label: 'Subject',
+                      onSaved: (value) => _subject = value,
+                      validator: (value) => value!.isEmpty ? 'Please enter the Subject' : null,
+                    ),
+                    _buildTextField(
                       label: 'Course Instructor',
                       onSaved: (value) => _instructor = value,
                       validator: (value) => value!.isEmpty ? 'Please enter an instructor name' : null,
@@ -68,11 +69,8 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                       keyboardType: TextInputType.number,
                       onSaved: (value) => _price = double.tryParse(value ?? ''),
                       validator: (value) {
-                        if (value!.isEmpty) {
-                          return 'Please enter a price';
-                        } else if (double.tryParse(value) == null) {
-                          return 'Please enter a valid number';
-                        }
+                        if (value!.isEmpty) return 'Please enter a price';
+                        if (double.tryParse(value) == null) return 'Please enter a valid number';
                         return null;
                       },
                     ),
@@ -103,124 +101,28 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     );
   }
 
+  Widget _buildBackground() {
+    return Image.asset(
+      'assets/images/background.jpg',
+      fit: BoxFit.cover,
+      color: Colors.black.withOpacity(0.3),
+      colorBlendMode: BlendMode.darken,
+    );
+  }
+
   AppBar _buildAppBar() {
     return AppBar(
-      title: Text(
-        'Add Course',
-        style: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-      ),
-      backgroundColor: Colors.blueAccent.withOpacity(0.7),
-      elevation: 0, // Removes shadow
-      actions: [
-        IconButton(
-          icon: Icon(Icons.help_outline, color: Colors.white),
-          onPressed: () {
-            // TODO: Add help action
-          },
-        ),
-        IconButton(
-          icon: Icon(Icons.settings, color: Colors.white),
-          onPressed: () {
-            // TODO: Add settings action
-          },
-        ),
-      ],
+      title: Text('Add Course', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+      backgroundColor: Colors.blueAccent.withOpacity(0.85),
+      elevation: 0,
     );
   }
 
-  Widget _buildImagePickerButton() {
-    return ElevatedButton.icon(
-      icon: Icon(Icons.image, color: Colors.white),
-      label: Text(
-        'Pick Image from Gallery',
-        style: TextStyle(fontSize: 16, color: Colors.white),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.blueAccent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8.0),
-        ),
-        padding: EdgeInsets.symmetric(vertical: 12.0),
-        elevation: 5,
-      ),
-      onPressed: _isLoading ? null : _pickImage,
+  Widget _buildTitle(String title) {
+    return Text(
+      title,
+      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.blueAccent),
     );
-  }
-
-  Widget _buildAddCourseButton(CourseProvider courseProvider) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.green,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8.0),
-        ),
-        padding: EdgeInsets.symmetric(vertical: 12.0),
-        elevation: 5,
-      ),
-      onPressed: _isLoading ? null : () => _addCourse(courseProvider),
-      child: _isLoading
-          ? CircularProgressIndicator(color: Colors.white)
-          : Text('Add Course', style: TextStyle(fontSize: 16)),
-    );
-  }
-
-  Future<void> _pickImage() async {
-    // Pick an image from the gallery
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _imageFile = File(pickedFile.path); // Store the image file
-      });
-    }
-  }
-
-  Future<void> _addCourse(CourseProvider courseProvider) async {
-    if (_formKey.currentState!.validate()) {
-      _formKey.currentState!.save();
-      setState(() {
-        _isLoading = true; // Set loading state
-      });
-
-      // Upload the image to Firebase and get the URL
-      String? imageUrl;
-      if (_imageFile != null) {
-        imageUrl = await courseProvider.uploadImage(_imageFile!);
-      }
-
-      // Call the addCourse method from the provider
-      await courseProvider.addCourse(
-        title: _courseTitle,
-        description: _description,
-        duration: _duration,
-        price: _price,
-        instructor: _instructor,
-        status: _status,
-        imageUrl: imageUrl ?? "https://via.placeholder.com/150", // Pass the image URL to the addCourse method
-      );
-
-      // Show Snackbar for confirmation
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Course added successfully!')),
-      );
-
-      // Reset the form
-      _formKey.currentState!.reset();
-      setState(() {
-        _imageFile = null; // Clear the selected image
-        _isLoading = false; // Reset loading state
-      });
-
-      // Navigate back after saving the course
-      Navigator.pop(context);
-    } else {
-      setState(() {
-        _isLoading = false; // Reset loading state if form is invalid
-      });
-    }
   }
 
   Widget _buildTextField({
@@ -237,7 +139,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
         keyboardType: keyboardType,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: TextStyle(color: Colors.black54), // Change label color
+          labelStyle: TextStyle(color: Colors.blueAccent),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8.0),
             borderSide: BorderSide(color: Colors.blueAccent),
@@ -257,6 +159,19 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     );
   }
 
+  Widget _buildImagePickerButton() {
+    return ElevatedButton.icon(
+      icon: Icon(Icons.image, color: Colors.white),
+      label: Text('Pick Image from Gallery', style: TextStyle(fontSize: 16, color: Colors.white)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.blueAccent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+        padding: EdgeInsets.symmetric(vertical: 12.0),
+      ),
+      onPressed: _isLoading ? null : _pickImage,
+    );
+  }
+
   Widget _buildImagePreview() {
     return Container(
       height: 150,
@@ -268,14 +183,69 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       child: _imageFile != null
           ? ClipRRect(
         borderRadius: BorderRadius.circular(10.0),
-        child: Image.file(
-          _imageFile!,
-          fit: BoxFit.cover,
-        ),
+        child: Image.file(_imageFile!, fit: BoxFit.cover),
       )
-          : Center(
-        child: Text('No image selected', style: TextStyle(color: Colors.grey)),
-      ),
+          : Center(child: Text('No image selected', style: TextStyle(color: Colors.grey))),
     );
+  }
+
+  Widget _buildAddCourseButton(CourseProvider courseProvider) {
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.green,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+        padding: EdgeInsets.symmetric(vertical: 12.0),
+      ),
+      onPressed: _isLoading ? null : () => _addCourse(courseProvider),
+      child: _isLoading
+          ? CircularProgressIndicator(color: Colors.white)
+          : Text('Add Course', style: TextStyle(fontSize: 16)),
+    );
+  }
+
+  Future<void> _pickImage() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _imageFile = File(pickedFile.path);
+      });
+    }
+  }
+
+  Future<void> _addCourse(CourseProvider courseProvider) async {
+    if (_formKey.currentState!.validate()) {
+      _formKey.currentState!.save();
+      setState(() {
+        _isLoading = true;
+      });
+
+      String? imageUrl;
+      if (_imageFile != null) {
+        imageUrl = await courseProvider.uploadImage(_imageFile!);
+      }
+
+      await courseProvider.addCourse(
+        title: _courseTitle,
+        description: _description,
+        duration: _duration,
+        price: _price,
+        instructor: _instructor,
+        status: _status,
+        subject: _subject,
+        imageUrl: imageUrl ?? "https://via.placeholder.com/150",
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Course added successfully!')),
+      );
+
+      setState(() {
+        _isLoading = false;
+        _formKey.currentState?.reset();
+        _imageFile = null;
+      });
+
+      Navigator.of(context).pop();
+    }
   }
 }

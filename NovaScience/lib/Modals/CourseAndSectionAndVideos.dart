@@ -65,6 +65,7 @@ class Course {
   String? imageUrl;
   List<Section> sections;
   String? status;
+  String? subject;
 
   Course({
     this.id,
@@ -78,6 +79,7 @@ class Course {
     this.imageUrl,
     this.sections = const [],
     this.status,
+    this.subject,
   });
 
   // Method to create a Course from a map
@@ -106,6 +108,7 @@ class Course {
       duration: data['duration'] as String?,
       imageUrl: data['imageUrl'] as String?,
       status: data['status'] as String?,
+      subject: data['subject'] as String?,
       sections: sectionList,
     );
   }
@@ -122,6 +125,7 @@ class Course {
       'imageUrl': imageUrl,
       'status': status,
       'sections': sections.map((section) => section.toMap()).toList(),
+      'subject': subject,
     };
   }
 }
