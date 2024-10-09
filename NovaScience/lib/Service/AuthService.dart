@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -11,21 +10,35 @@ class AuthService extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
-  final FirebaseAuth auth = FirebaseAuth.instance;
 
-  // Public getter for the current user
-  User? get currentUser => auth.currentUser;
   CustomUser? _user;
   CustomUser? get user => _user;
+
+  // Public getter for the current Firebase user
+  User? get currentUser => _auth.currentUser;
+
+  // Check if the current user is an admin
+  Future<bool> isAdmin() async {
+    if (currentUser != null) {
+      final userData = await getUserData(currentUser!.uid);
+      if (userData != null && userData['role'] == 'Admin') {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Future<Map<String, dynamic>?> getUserData(String uid) async {
     try {
-      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      DocumentSnapshot doc =
+      await FirebaseFirestore.instance.collection('users').doc(uid).get();
       return doc.data() as Map<String, dynamic>?;
     } catch (e) {
       print(e);
       return null;
     }
   }
+
   // Sign up method with additional fields
   Future<void> signUpWithEmail({
     required String name,
@@ -214,7 +227,6 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-
   Future<String?> getCurrentUserEmail() async {
     User? user = _auth.currentUser;
     notifyListeners(); // Notify after fetching current user's email
@@ -342,7 +354,10 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  Future<void> updateUserByEmail({String? email, Map<String, dynamic>? updatedData}) async {
+  Future<void> updateUserByEmail({
+    String? email,
+    Map<String, dynamic>? updatedData,
+  }) async {
     try {
       final userQuery = await _firestore.collection('users').where('email', isEqualTo: email).get();
 

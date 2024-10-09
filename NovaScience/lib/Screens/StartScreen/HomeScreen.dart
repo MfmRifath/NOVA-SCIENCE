@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:nova_science/Screens/AddCourseScreen.dart';
 import 'package:provider/provider.dart';
-import '../../Modals/CourseAndSectionAndVideos.dart';
+
 import '../../Service/CourseProvider.dart';
 
 String? selectedCourseId;

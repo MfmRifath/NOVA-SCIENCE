@@ -47,7 +47,6 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bool isDarkMode = theme.brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(

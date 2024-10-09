@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+
 
 import '../../Service/AuthService.dart';
 
@@ -113,7 +113,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           child: CircleAvatar(
             radius: 70,
-            backgroundImage: NetworkImage("https://via.placeholder.com/150"),
+            backgroundImage: NetworkImage(userData!["profileImageUrl"]),
           ),
         ),
       ),
@@ -251,7 +251,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Divider(color: Colors.white54),
           StaggeredFadeInAnimation(
             key: ValueKey(7),
-            child: _buildProfileInfoItem(Icons.cake, "Birthday", userData?['birthday'] ?? "January 1, 1990"),
+            child: _buildProfileInfoItem(Icons.cake, "Birthday", userData?['birthday'].toString() ?? "January 1, 1990"),
           ),
           Divider(color: Colors.white54),
         ],

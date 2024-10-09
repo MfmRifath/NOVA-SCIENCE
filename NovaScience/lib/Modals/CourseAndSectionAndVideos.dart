@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:convert'; // Import the json package
+
+
+
 
 // Define the Video class
 class Video {
@@ -52,7 +54,39 @@ class Section {
     };
   }
 }
+// Define the Section class
+// Define the FeedBack class
+class FeedBack {
+  String userId;
+  String userName;
+  String feedback;
+  Timestamp? date;
 
+  FeedBack({required this.userName, required this.feedback, this.date, required this.userId});
+
+  // Method to create FeedBack from a map
+  factory FeedBack.fromMap(Map<String, dynamic> data) {
+    return FeedBack(
+      userName: data['userName'] ?? '',
+      feedback: data['feedback'] ?? '',
+      date: data['date'] ?? '',
+      userId: data['userId']
+
+    );
+  }
+
+  // Convert FeedBack to a map
+  Map<String, dynamic> toMap() {
+    return {
+      'userName': userName,
+      'feedback': feedback,
+      'date':date,
+      'userId':userId
+    };
+  }
+}
+
+// Updated Course class
 class Course {
   String? id; // Document ID
   String? courseTitle;
@@ -64,6 +98,7 @@ class Course {
   String? duration;
   String? imageUrl;
   List<Section> sections;
+  List<FeedBack> feedbacks; // Feedback list
   String? status;
   String? subject;
 
@@ -80,25 +115,35 @@ class Course {
     this.sections = const [],
     this.status,
     this.subject,
+    this.feedbacks = const [], // Initialize feedbacks
   });
 
   // Method to create a Course from a map
   factory Course.fromMap(Map<String, dynamic> data, String? documentId) {
-    // Ensure sections is parsed correctly as a list of Section objects
+    // Parse sections
     List<Section> sectionList = [];
-
     if (data['sections'] is List) {
       sectionList = (data['sections'] as List).map((sectionData) {
-        // Ensure sectionData is a Map
         if (sectionData is Map<String, dynamic>) {
           return Section.fromMap(sectionData);
         }
-        return null; // or throw an exception if invalid data
-      }).whereType<Section>().toList(); // Filter out any null values
+        return null;
+      }).whereType<Section>().toList();
+    }
+
+    // Parse feedbacks
+    List<FeedBack> feedbackList = [];
+    if (data['feedbacks'] is List) {
+      feedbackList = (data['feedbacks'] as List).map((feedbackData) {
+        if (feedbackData is Map<String, dynamic>) {
+          return FeedBack.fromMap(feedbackData);
+        }
+        return null;
+      }).whereType<FeedBack>().toList();
     }
 
     return Course(
-      id: documentId, // Set the document ID here
+      id: documentId,
       courseTitle: data['courseTitle'] as String?,
       description: data['description'] as String?,
       price: (data['price'] as num?)?.toDouble(),
@@ -110,8 +155,10 @@ class Course {
       status: data['status'] as String?,
       subject: data['subject'] as String?,
       sections: sectionList,
+      feedbacks: feedbackList, // Assign parsed feedbacks
     );
   }
+
   // Convert Course to a map
   Map<String, dynamic> toMap() {
     return {
@@ -125,6 +172,7 @@ class Course {
       'imageUrl': imageUrl,
       'status': status,
       'sections': sections.map((section) => section.toMap()).toList(),
+      'feedbacks': feedbacks.map((feedback) => feedback.toMap()).toList(), // Map feedbacks
       'subject': subject,
     };
   }
