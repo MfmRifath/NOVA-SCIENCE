@@ -87,7 +87,20 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
                   },
                 ),
               ),
-
+// Enrollment Section
+              SizedBox(height: 10),
+              Card(
+                color: Colors.teal[50],
+                child: ListTile(
+                  leading: Icon(Icons.school, color: Colors.teal),
+                  title: Text('Enroll Users into Courses', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  subtitle: Text('Assign courses to users.'),
+                  trailing: Icon(Icons.arrow_forward_ios),
+                  onTap: () {
+                    Navigator.pushNamed(context, '/enrollUsers');
+                  },
+                ),
+              ),
               SizedBox(height: 10),
 
               // Reports and Analytics

@@ -287,81 +287,132 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     TextEditingController emailController = TextEditingController(text: user?.email ?? '');
     TextEditingController roleController = TextEditingController(text: user?.role ?? '');
     TextEditingController phoneNumberController = TextEditingController(text: user?.phoneNumber ?? '');
+    TextEditingController passwordController = TextEditingController(); // For password input
+    TextEditingController confirmPasswordController = TextEditingController(); // For password confirmation
 
     String? profileImageUrl = user?.profileImageUrl ?? 'https://via.placeholder.com/150'; // Default image
 
     return await showDialog<CustomUser>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(user == null ? 'Add User' : 'Edit User'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Name'),
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(user == null ? 'Add User' : 'Edit User'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: 'Name'),
+                    ),
+                    TextField(
+                      controller: emailController,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                    ),
+                    TextField(
+                      controller: roleController,
+                      decoration: const InputDecoration(labelText: 'Role'),
+                    ),
+                    TextField(
+                      controller: phoneNumberController,
+                      decoration: const InputDecoration(labelText: 'Phone Number'),
+                    ),
+                    TextField(
+                      controller: passwordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: 'Password'),
+                    ),
+                    TextField(
+                      controller: confirmPasswordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: 'Confirm Password'),
+                    ),
+                    const SizedBox(height: 16),
+                    profileImageUrl != null
+                        ? CircleAvatar(
+                      radius: 40,
+                      backgroundImage: NetworkImage(profileImageUrl!),
+                    )
+                        : const CircleAvatar(
+                      radius: 40,
+                      child: Icon(Icons.person),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        // Image picking logic
+                        final pickedImage = await ImagePicker().pickImage(source: ImageSource.gallery);
+                        if (pickedImage != null) {
+                          File imageFile = File(pickedImage.path);
+                          // Upload image to Firebase Storage and get URL
+                          Reference storageReference = FirebaseStorage.instance
+                              .ref()
+                              .child('profile_images/${DateTime.now().millisecondsSinceEpoch}');
+                          UploadTask uploadTask = storageReference.putFile(imageFile);
+                          TaskSnapshot taskSnapshot = await uploadTask;
+                          profileImageUrl = await taskSnapshot.ref.getDownloadURL();
+                          setState(() {});
+                        }
+                      },
+                      child: const Text('Change Profile Image'),
+                    ),
+                  ],
+                ),
               ),
-              TextField(
-                controller: emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
-              ),
-              TextField(
-                controller: roleController,
-                decoration: const InputDecoration(labelText: 'Role'),
-              ),
-              TextField(
-                controller: phoneNumberController,
-                decoration: const InputDecoration(labelText: 'Phone Number'),
-              ),
-              const SizedBox(height: 16),
-              profileImageUrl != null
-                  ? CircleAvatar(
-                radius: 40,
-                backgroundImage: NetworkImage(profileImageUrl!),
-              )
-                  : const CircleAvatar(
-                radius: 40,
-                child: Icon(Icons.person),
-              ),
-              TextButton(
-                onPressed: () async {
-                  // Image picking logic
-                  final pickedImage = await ImagePicker().pickImage(source: ImageSource.gallery);
-                  if (pickedImage != null) {
-                    File imageFile = File(pickedImage.path);
-                    // Upload image to Firebase Storage and get URL
-                    Reference storageReference = FirebaseStorage.instance.ref().child('profile_images/${DateTime.now().millisecondsSinceEpoch}');
-                    UploadTask uploadTask = storageReference.putFile(imageFile);
-                    TaskSnapshot taskSnapshot = await uploadTask;
-                    profileImageUrl = await taskSnapshot.ref.getDownloadURL();
-                    setState(() {});
-                  }
-                },
-                child: const Text('Change Profile Image'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(
-                  CustomUser(
-                    name: nameController.text,
-                    email: emailController.text,
-                    role: roleController.text,
-                    phoneNumber: phoneNumberController.text,
-                    profileImageUrl: profileImageUrl,
-                  ),
-                );
-              },
-              child: const Text('Save'),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    if (passwordController.text != confirmPasswordController.text) {
+                      // Show error if passwords do not match
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Passwords do not match')),
+                      );
+                      return;
+                    }
+
+                    try {
+                      if (user == null) {
+                        // Create a new user
+                        UserCredential userCredential = await FirebaseAuth.instance
+                            .createUserWithEmailAndPassword(
+                          email: emailController.text,
+                          password: passwordController.text,
+                        );
+                        // Handle user creation logic here
+                      } else {
+                        // Optionally update password for an existing user
+                        User? currentUser = FirebaseAuth.instance.currentUser;
+                        if (currentUser != null) {
+                          await currentUser.updatePassword(passwordController.text);
+                        }
+                      }
+
+                      Navigator.of(context).pop(
+                        CustomUser(
+                          name: nameController.text,
+                          email: emailController.text,
+                          role: roleController.text,
+                          phoneNumber: phoneNumberController.text,
+                          profileImageUrl: profileImageUrl,
+                        ),
+                      );
+                    } catch (e) {
+                      // Show error message
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error: ${e.toString()}')),
+                      );
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
         );
       },
     );

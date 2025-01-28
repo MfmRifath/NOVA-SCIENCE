@@ -1,13 +1,18 @@
+// CourseScreen.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:intl/intl.dart';
-import 'package:nova_science/Modals/User.dart';
 import 'package:nova_science/Service/AuthService.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+
 import '../Modals/CourseAndSectionAndVideos.dart';
+import '../Modals/User.dart';
 import '../Service/CourseProvider.dart';
 
 class CourseScreen extends StatefulWidget {
@@ -23,20 +28,268 @@ class _CourseScreenState extends State<CourseScreen>
     with TickerProviderStateMixin {
   YoutubePlayerController? _youtubeController;
   late TabController _tabController;
-  FirebaseAuth? _auth;
   Course? _course;
   bool isLoading = true;
   bool isActionLoading = false;
+  final TextEditingController _feedbackController = TextEditingController();
+  double _currentRating = 3.0;
+  bool _isSubmitting = false;
 
-  // For indicating loading in dialog actions
+  // Enrollment and Admin related variables
+  bool isEnrolled = false;
+  bool isAdmin = false; // New variable to track Admin status
+  bool isCheckingEnrollment = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _fetchCourseData();
+    _initializeCourse();
   }
 
+  /// Initializes course data, enrollment status, and Admin status.
+  Future<void> _initializeCourse() async {
+    try {
+      final courseProvider =
+      Provider.of<CourseProvider>(context, listen: false);
+      _course = await courseProvider.getCourseById(widget.courseId);
+
+      final authProvider =
+      Provider.of<AuthService>(context, listen: false);
+      final CustomUser? currentUser = await authProvider.getCurrentUser();
+
+      if (currentUser != null && _course != null) {
+        // Check if the user is enrolled in the course
+        isEnrolled = currentUser.enrolledCourses?.contains(_course!.id) ?? false;
+        // Check if the user is an Admin
+        isAdmin = currentUser.role == 'Admin';
+      }
+
+      // Initialize TabController based on enrollment or Admin status
+      _tabController = TabController(
+        length: (isEnrolled || isAdmin) ? 3 : 2,
+        vsync: this,
+      );
+
+      // Initialize YoutubePlayerController if enrolled/Admin and has videos
+      if ((isEnrolled || isAdmin) &&
+          _course!.sections.isNotEmpty &&
+          _course!.sections.first.videos.isNotEmpty) {
+        _initializeYoutubePlayer(
+            _course!.sections.first.videos.first.videoUrl);
+      }
+
+      setState(() {
+        isLoading = false;
+        isCheckingEnrollment = false;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Failed to load course data: $e'),
+        duration: Duration(seconds: 3),
+      ));
+      setState(() {
+        isLoading = false;
+        isCheckingEnrollment = false;
+      });
+    }
+  }
+
+  /// Deletes a specific video from a course section.
+  void _deleteVideo(String courseId, String sectionTitle, int videoIndex) async {
+    // Show a confirmation dialog before deletion
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Video'),
+          content: const Text('Are you sure you want to delete this video?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    // If the user confirms deletion, proceed with deletion
+    if (shouldDelete == true) {
+      setState(() {
+        isActionLoading = true; // Start loading
+      });
+
+      try {
+        final courseProvider =
+        Provider.of<CourseProvider>(context, listen: false);
+        await courseProvider.deleteVideo(courseId, sectionTitle, videoIndex);
+
+        setState(() {
+          isActionLoading = false; // End loading
+        });
+
+        // Refresh course data
+        await _initializeCourse();
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Video deleted successfully.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        print("Error deleting video: $e");
+        setState(() {
+          isActionLoading = false; // End loading
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to delete video. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Shows a dialog to edit a video's details.
+  void _showEditVideoDialog(
+      String sectionTitle, Video video, int videoIndex) {
+    final TextEditingController _titleController =
+    TextEditingController(text: video.title);
+    final TextEditingController _urlController =
+    TextEditingController(text: video.videoUrl);
+    bool _isUpdating = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Edit Video'),
+          content: SingleChildScrollView(
+            child: Column(
+              children: [
+                TextField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Video Title',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _urlController,
+                  decoration: const InputDecoration(
+                    labelText: 'Video URL',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
+            TextButton(
+              onPressed: _isUpdating
+                  ? null
+                  : () async {
+                String newTitle = _titleController.text.trim();
+                String newUrl = _urlController.text.trim();
+
+                if (newTitle.isEmpty || newUrl.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content:
+                      Text('Please fill out both title and URL.'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+
+                // Validate YouTube URL
+                String? videoId = YoutubePlayer.convertUrlToId(newUrl);
+                if (videoId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content:
+                      Text('Please enter a valid YouTube video URL.'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+
+                setState(() {
+                  _isUpdating = true;
+                });
+
+                try {
+                  final courseProvider =
+                  Provider.of<CourseProvider>(context, listen: false);
+                  await courseProvider.updateVideo(
+                      _course!.id!,
+                      sectionTitle,
+                      videoIndex,
+                      newTitle,
+                      newUrl);
+
+                  setState(() {
+                    _isUpdating = false;
+                  });
+
+                  Navigator.pop(context);
+
+                  // Refresh course data
+                  await _initializeCourse();
+
+                  // Show success message
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content:
+                      Text('Video updated successfully!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } catch (e) {
+                  print("Error updating video: $e");
+                  setState(() {
+                    _isUpdating = false;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content:
+                      Text('Failed to update video. Please try again.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: _isUpdating
+                  ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.blueAccent,
+                  strokeWidth: 2.0,
+                ),
+              )
+                  : const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Initializes the YouTube player with the given video URL.
   void _initializeYoutubePlayer(String? videoUrl) {
     if (videoUrl == null || videoUrl.isEmpty) return;
 
@@ -60,478 +313,152 @@ class _CourseScreenState extends State<CourseScreen>
   void dispose() {
     _youtubeController?.dispose();
     _tabController.dispose();
+    _feedbackController.dispose();
     super.dispose();
   }
 
-  void _playVideo(String videoUrl) {
-    String? videoId = YoutubePlayer.convertUrlToId(videoUrl);
-    if (videoId != null) {
-      _youtubeController!.load(videoId);
-    } else {
-      print("Invalid video URL");
-    }
-  }
+  /// Enrolls the current user in the course.
+  Future<void> _enrollUser() async {
+    final courseProvider =
+    Provider.of<CourseProvider>(context, listen: false);
+    final authProvider =
+    Provider.of<AuthService>(context, listen: false);
+    final CustomUser? currentUser = await authProvider.getCurrentUser();
 
-  Future<void> _fetchCourseData() async {
-    try {
-      final courseProvider =
-          Provider.of<CourseProvider>(context, listen: false);
-      _course = await courseProvider.getCourseById(widget.courseId);
-
-      setState(() {
-        isLoading = false;
-      });
-
-      if (_course != null &&
-          _course!.sections.isNotEmpty &&
-          _course!.sections.first.videos.isNotEmpty) {
-        _initializeYoutubePlayer(_course!.sections.first.videos.first.videoUrl);
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Failed to load course data: $e'),
-        duration: Duration(seconds: 3),
-      ));
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
-
-  void _addVideoToSection(String courseId, String sectionTitle,
-      String videoTitle, String videoUrl, BuildContext context) {
-    final courseProvider = Provider.of<CourseProvider>(context, listen: false);
-    courseProvider.addVideoToSection(
-        courseId, sectionTitle, Video(title: videoTitle, videoUrl: videoUrl));
-  }
-
-  void _deleteVideo(String courseId, String sectionTitle, int videoIndex) {
-    final courseProvider = Provider.of<CourseProvider>(context, listen: false);
-    courseProvider.deleteVideo(widget.courseId, sectionTitle, videoIndex);
-  }
-
-  void _deleteSection(int sectionIndex, Section section) async {
-    try {
-      final courseProvider =
-          Provider.of<CourseProvider>(context, listen: false);
-      await courseProvider.deleteSection(widget.courseId, section.sectionTitle);
-    } catch (e) {
-      // Handle the error, e.g., show a SnackBar
+    if (currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting section: $e')),
+        SnackBar(
+          content: Text('You must be logged in to enroll.'),
+          backgroundColor: Colors.red,
+        ),
       );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Course Details')),
-        body: Center(
-            child: SpinKitDoubleBounce(
-          color: Colors.white,
-        )),
-      );
+      return;
     }
 
-    if (!(_youtubeController is YoutubePlayerController)) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Course Details')),
-        body: Column(
-          children: [
-            Center(child: Text('Video player not initialized')),
-            _buildSectionsList(_course!)
-          ],
+    setState(() {
+      isActionLoading = true;
+    });
+
+    bool success =
+    await courseProvider.enrollInCourse(_course!.id!, currentUser.id!);
+
+    setState(() {
+      isActionLoading = false;
+      if (success) {
+        isEnrolled = true;
+        // Update the TabController based on the new enrollment status
+        _tabController.dispose();
+        _tabController = TabController(
+          length: (isEnrolled || isAdmin) ? 3 : 2,
+          vsync: this,
+        );
+      }
+    });
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully enrolled in the course!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Initialize YouTube player if there are videos
+      if (_course!.sections.isNotEmpty &&
+          _course!.sections.first.videos.isNotEmpty) {
+        _initializeYoutubePlayer(
+            _course!.sections.first.videos.first.videoUrl);
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to enroll. Please try again.'),
+          backgroundColor: Colors.red,
         ),
       );
     }
+  }
 
-    return SafeArea(
-      child: YoutubePlayerBuilder(
-        player: YoutubePlayer(
-          controller: _youtubeController!,
-          showVideoProgressIndicator: true,
-          onReady: () => print("Player is ready"),
-          onEnded: (metaData) => print("Video has ended"),
+  /// Unenrolls the current user from the course.
+  Future<void> _unenrollUser() async {
+    final courseProvider =
+    Provider.of<CourseProvider>(context, listen: false);
+    final authProvider =
+    Provider.of<AuthService>(context, listen: false);
+    final CustomUser? currentUser = await authProvider.getCurrentUser();
+
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('You must be logged in to unenroll.'),
+          backgroundColor: Colors.red,
         ),
-        builder: (context, player) {
-          return Scaffold(
-            appBar: AppBar(
-              title: Text(_course!.courseTitle ?? 'Course Details'),
-              backgroundColor: Colors.blueAccent,
-              actions: [
-                IconButton(
-                  icon: Icon(Icons.edit, semanticLabel: 'Edit Course'),
-                  onPressed: () => _showEditCourseDialog(context, _course!),
-                ),
-                IconButton(
-                  icon: Icon(Icons.delete, semanticLabel: 'Delete Course'),
-                  onPressed: () {
-                    Provider.of<CourseProvider>(context, listen: false)
-                        .deleteCourse(_course!.id);
-                    Navigator.pop(context);
-                  },
-                ),
-                IconButton(
-                  icon: Icon(Icons.add, semanticLabel: 'Add Section'),
-                  onPressed: () => _showAddSectionDialog(context),
-                ),
-              ],
-            ),
-            body: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Hero(
-                      tag: 'videoHero',
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16.0),
-                        child: AspectRatio(
-                          aspectRatio: 16 / 9,
-                          child: player,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    TabBar(
-                      controller: _tabController,
-                      indicatorColor: const Color(0xFF3F51B5),
-                      labelColor: Colors.black,
-                      unselectedLabelColor: Colors.grey,
-                      tabs: const [
-                        Tab(text: "Overview"),
-                        Tab(text: "Lessons"),
-                        Tab(text: "Feedback"),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 500, // Fixed height to avoid scrolling issues
-                      child: TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _buildOverview(_course!),
-                          _buildSectionsList(_course!),
-                          Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            // Proper padding around the feedback section
-                            child: _buildFeedbackTab(context),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
+      );
+      return;
+    }
 
-  Widget _buildOverview(Course course) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 30.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          // Course Title
-          Text(
-            'Course Overview',
-            style: TextStyle(
-              fontSize: 36,
-              fontWeight: FontWeight.bold,
-              color: Colors.deepPurple[900],
-            ),
-          ),
-          const SizedBox(height: 16),
+    setState(() {
+      isActionLoading = true;
+    });
 
-          // Course Card with Gradient Background
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.deepPurple[300]!, Colors.deepPurple[600]!],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Instructor Name
-                  Row(
-                    children: [
-                      const Icon(Icons.person, color: Colors.white, size: 28),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Instructor: ${course.instructor ?? "Instructor Name"}',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
+    bool success =
+    await courseProvider.unenrollFromCourse(_course!.id!, currentUser.id!);
 
-                  // Description Header
-                  const Text(
-                    'Course Description',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+    setState(() {
+      isActionLoading = false;
+      if (success) {
+        isEnrolled = false;
+        // Update the TabController based on the new enrollment status
+        _tabController.dispose();
+        _tabController = TabController(
+          length: (isEnrolled || isAdmin) ? 3 : 2,
+          vsync: this,
+        );
+      }
+    });
 
-                  // Adjusted Description for Overflow Management
-                  Text(
-                    course.description ?? 'No description available.',
-                    style: TextStyle(fontSize: 16, height: 1.5, color: Colors.white70),
-                    maxLines: 5, // Limit to 5 lines
-                    overflow: TextOverflow.ellipsis, // Add ellipsis for overflow
-                  ),
-                  const SizedBox(height: 20),
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully unenrolled from the course.'),
+          backgroundColor: Colors.green,
+        ),
+      );
 
-                  // Price and Duration Row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '\$${course.price}',
-                            style: const TextStyle(
-                              fontSize: 40,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.greenAccent,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${course.duration ?? "Duration not specified"}',
-                            style: TextStyle(fontSize: 18, color: Colors.white70),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 10), // Space between Price and Button
-
-                      // Using Flexible to prevent overflow
-                      Flexible(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Enrollment coming soon!'),
-                                duration: const Duration(seconds: 2),
-                                backgroundColor: Colors.blueAccent,
-                              ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                            backgroundColor: Colors.greenAccent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30.0),
-                            ),
-                            elevation: 6,
-                          ),
-                          child: const Text(
-                            'Enroll Now',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 30), // Space after the card
-          // Additional Resources Section (leave space for this section)
-          // Placeholder for additional resources
-        ],
-      ),
-    );
-  }
-
-
-  Widget _buildSectionsList(Course course) {
-    if (course.sections.isEmpty) {
-      return Center(
-        child: TextButton(
-          onPressed: () => _showAddSectionDialog(context),
-          child: Text('Add Sections'),
+      // Dispose YouTube controller if unenrolled
+      _youtubeController?.dispose();
+      _youtubeController = null;
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to unenroll. Please try again.'),
+          backgroundColor: Colors.red,
         ),
       );
     }
-
-    return SizedBox(
-      height: 500.0,
-      child: ListView.builder(
-        itemCount: course.sections.length,
-        itemBuilder: (context, index) {
-          final section = course.sections[index];
-          return _buildSectionCard(section, index);
-        },
-      ),
-    );
   }
 
-  Widget _buildSectionCard(Section section, int sectionIndex) {
-    return Card(
-      elevation: 4,
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
-      child: ExpansionTile(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              section.sectionTitle,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.edit),
-                  onPressed: () =>
-                      _showEditSectionDialog(section, sectionIndex),
-                ),
-                IconButton(
-                  icon: Icon(Icons.delete),
-                  onPressed: () => _confirmDeleteSection(sectionIndex, section),
-                ),
-              ],
-            ),
-          ],
-        ),
-        children: [
-          if (section.videos.isNotEmpty)
-            ...section.videos.asMap().entries.map((entry) {
-              int videoIndex = entry.key;
-              Video video = entry.value;
-
-              return ListTile(
-                leading: Icon(Icons.play_circle_outline),
-                title: Text(video.title),
-                subtitle: Text('Click to play'),
-                onTap: () => _playVideo(video.videoUrl),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.edit),
-                      onPressed: () => _showEditVideoDialog(
-                          section.sectionTitle, video, videoIndex),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.delete),
-                      onPressed: () => _deleteVideo(
-                          widget.courseId, section.sectionTitle, videoIndex),
-                    ),
-                  ],
-                ),
-              );
-            }).toList()
-          else
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Center(child: Text('No videos available')),
-            ),
-          TextButton(
-            onPressed: () =>
-                _showAddVideoDialog(widget.courseId, section.sectionTitle),
-            child: Text('Add Video'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showEditCourseDialog(BuildContext context, Course course) {
-    final TextEditingController titleController =
-        TextEditingController(text: course.courseTitle);
-    final TextEditingController descriptionController =
-        TextEditingController(text: course.description);
-    final TextEditingController priceController =
-        TextEditingController(text: course.price.toString());
-    final TextEditingController subjectController =
-        TextEditingController(text: course.subject);
-
+  /// Shows a confirmation dialog before enrolling.
+  void _confirmEnroll() {
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Edit Course'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: InputDecoration(labelText: 'Course Title'),
-                ),
-                TextField(
-                  controller: descriptionController,
-                  decoration: InputDecoration(labelText: 'Course Description'),
-                  maxLines: 3,
-                ),
-                TextField(
-                  controller: priceController,
-                  decoration: InputDecoration(labelText: 'Course Price'),
-                  keyboardType: TextInputType.number,
-                ),
-                TextField(
-                  controller: subjectController,
-                  decoration: InputDecoration(labelText: 'subject'),
-                ),
-              ],
-            ),
-          ),
+          title: Text('Enroll in Course'),
+          content: Text('Are you sure you want to enroll in this course?'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
-                // Validate and save course details
-                if (titleController.text.isNotEmpty &&
-                    descriptionController.text.isNotEmpty &&
-                    priceController.text.isNotEmpty) ;
-                // Update the course object with new values
-                Provider.of<CourseProvider>(context, listen: false).editCourse(
-                  course.id!,
-                  titleController.text,
-                  descriptionController.text,
-                  double.parse(priceController.text),
-                  subjectController.text,
-                );
-
-                // Dismiss the dialog
-                Navigator.pop(context);
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _enrollUser();
               },
-              child: const Text('Save'),
+              child: isActionLoading
+                  ? SpinKitDoubleBounce(color: Colors.white, size: 20)
+                  : Text('Enroll'),
             ),
           ],
         );
@@ -539,6 +466,56 @@ class _CourseScreenState extends State<CourseScreen>
     );
   }
 
+  /// Shows a confirmation dialog before unenrolling.
+  void _confirmUnenroll() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Unenroll from Course'),
+          content: Text('Are you sure you want to unenroll from this course?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _unenrollUser();
+              },
+              child: isActionLoading
+                  ? SpinKitDoubleBounce(color: Colors.white, size: 20)
+                  : Text('Unenroll'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Shows a confirmation dialog before deleting a course.
+  Future<bool> _showDeleteConfirmation(BuildContext context) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Course'),
+        content: const Text(
+            'Are you sure you want to delete this course? This action cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete')),
+        ],
+      ),
+    ) ??
+        false;
+  }
+
+  /// Shows a dialog to add a new section.
   void _showAddSectionDialog(BuildContext context) {
     final _sectionTitleController = TextEditingController();
 
@@ -546,33 +523,38 @@ class _CourseScreenState extends State<CourseScreen>
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: Text('Add Section'),
+          title: const Text('Add Section'),
           content: TextField(
             controller: _sectionTitleController,
-            decoration: InputDecoration(
-                labelText: 'Section Title', hintText: 'Enter section title'),
+            decoration: const InputDecoration(
+                labelText: 'Section Title',
+                hintText: 'Enter section title'),
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
             TextButton(
               onPressed: () async {
                 if (_sectionTitleController.text.isNotEmpty) {
                   setState(() => isActionLoading = true); // Start loading
                   final courseProvider =
-                      Provider.of<CourseProvider>(context, listen: false);
+                  Provider.of<CourseProvider>(context, listen: false);
                   await courseProvider.addSection(
                       widget.courseId, _sectionTitleController.text);
                   setState(() => isActionLoading = false); // End loading
                   Navigator.pop(context);
+
+                  // Refresh course data
+                  await _initializeCourse();
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Please enter a section title')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Please enter a section title')));
                 }
               },
               child: isActionLoading
-                  ? CircularProgressIndicator() // Show loader during the action
-                  : Text('Add Section'),
+                  ? SpinKitDoubleBounce(color: Colors.white)
+                  : const Text('Add Section'),
             ),
           ],
         ),
@@ -580,6 +562,7 @@ class _CourseScreenState extends State<CourseScreen>
     );
   }
 
+  /// Shows a dialog to add a new video to a section.
   void _showAddVideoDialog(String courseId, String sectionTitle) {
     final _videoTitleController = TextEditingController();
     final _videoUrlController = TextEditingController();
@@ -594,12 +577,14 @@ class _CourseScreenState extends State<CourseScreen>
             children: [
               TextField(
                 controller: _videoTitleController,
-                decoration: InputDecoration(
-                    labelText: 'Video Title', hintText: 'Enter video title'),
+                decoration: const InputDecoration(
+                    labelText: 'Video Title',
+                    hintText: 'Enter video title'),
               ),
+              const SizedBox(height: 10),
               TextField(
                 controller: _videoUrlController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                     labelText: 'Video URL',
                     hintText: 'Enter valid YouTube URL'),
               ),
@@ -607,30 +592,42 @@ class _CourseScreenState extends State<CourseScreen>
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
             TextButton(
               onPressed: () async {
                 if (_videoTitleController.text.isNotEmpty &&
                     _videoUrlController.text.isNotEmpty) {
-                  setState(() => isActionLoading = true); // Start loading
-                  _addVideoToSection(
-                      courseId,
-                      sectionTitle,
-                      _videoTitleController.text,
-                      _videoUrlController.text,
-                      context);
-                  setState(() => isActionLoading = false); // End loading
-                  Navigator.pop(context);
+                  // Validate YouTube URL
+                  String? videoId = YoutubePlayer.convertUrlToId(
+                      _videoUrlController.text);
+                  if (videoId != null) {
+                    setState(() => isActionLoading = true); // Start loading
+                    await Provider.of<CourseProvider>(context, listen: false)
+                        .addVideoToSection(
+                        courseId,
+                        sectionTitle,
+                        Video(
+                            title: _videoTitleController.text,
+                            videoUrl: _videoUrlController.text));
+                    setState(() => isActionLoading = false); // End loading
+                    Navigator.pop(context);
+
+                    // Refresh course data
+                    await _initializeCourse();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content:
+                        Text('Please enter a valid YouTube video URL')));
+                  }
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Please fill out all fields')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Please fill out all fields')));
                 }
               },
               child: isActionLoading
-                  ? SpinKitDoubleBounce(
-                      color: Colors.white,
-                    ) // Show loader during the action
-                  : Text('Add Video'),
+                  ? SpinKitDoubleBounce(color: Colors.white)
+                  : const Text('Add Video'),
             ),
           ],
         ),
@@ -638,44 +635,49 @@ class _CourseScreenState extends State<CourseScreen>
     );
   }
 
+  /// Shows a dialog to edit a section's title.
   void _showEditSectionDialog(Section section, int sectionIndex) {
     final _sectionTitleController =
-        TextEditingController(text: section.sectionTitle);
+    TextEditingController(text: section.sectionTitle);
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: Text('Edit Section'),
+          title: const Text('Edit Section'),
           content: TextField(
             controller: _sectionTitleController,
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
                 labelText: 'Section Title',
                 hintText: 'Enter new section title'),
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
             TextButton(
               onPressed: () async {
                 if (_sectionTitleController.text.isNotEmpty) {
                   setState(() => isActionLoading = true); // Start loading
                   final courseProvider =
-                      Provider.of<CourseProvider>(context, listen: false);
-                  await courseProvider.editSection(widget.courseId,
-                      section.sectionTitle, _sectionTitleController.text);
+                  Provider.of<CourseProvider>(context, listen: false);
+                  await courseProvider.editSection(
+                      widget.courseId,
+                      section.sectionTitle ?? '',
+                      _sectionTitleController.text);
                   setState(() => isActionLoading = false); // End loading
                   Navigator.pop(context);
+
+                  // Refresh course data
+                  await _initializeCourse();
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Please enter a section title')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Please enter a section title')));
                 }
               },
               child: isActionLoading
-                  ? SpinKitDoubleBounce(
-                      color: Colors.white,
-                    ) // Show loader during the action
-                  : Text('Save'),
+                  ? SpinKitDoubleBounce(color: Colors.white)
+                  : const Text('Save'),
             ),
           ],
         ),
@@ -683,116 +685,855 @@ class _CourseScreenState extends State<CourseScreen>
     );
   }
 
-  void _showEditVideoDialog(String sectionTitle, Video video, int videoIndex) {
-    final _videoTitleController = TextEditingController(text: video.title);
-    final _videoUrlController = TextEditingController(text: video.videoUrl);
+  /// Shows a confirmation dialog before deleting a section.
+  void _confirmDeleteSection(int sectionIndex, Section section) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Section'),
+          content: const Text('Are you sure you want to delete this section?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                setState(() => isActionLoading = true); // Start loading
+                await Provider.of<CourseProvider>(context, listen: false)
+                    .deleteSection(widget.courseId, section.sectionTitle ?? '');
+                setState(() => isActionLoading = false); // End loading
+                Navigator.of(context).pop(); // Close the dialog
+
+                // Refresh course data
+                await _initializeCourse();
+              },
+              child: isActionLoading
+                  ? SpinKitDoubleBounce(color: Colors.white, size: 20)
+                  : const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Builds the Overview tab content.
+  Widget _buildOverview(Course course) {
+    final String adminPhoneNumber =
+        "0764505892"; // Replace with the actual admin phone number
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 30.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          // Section Title
+          Text(
+            'Course Overview',
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: Colors.deepPurple[800],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Gradient Course Card
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.deepPurple[300]!, Colors.deepPurple[700]!],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Instructor Details
+                  Row(
+                    children: [
+                      const Icon(Icons.person,
+                          color: Colors.white, size: 28),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Instructor: ${course.instructor ?? "N/A"}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Course Description
+                  Text(
+                    'Course Description',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    course.description ?? 'No description available.',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      height: 1.6,
+                      color: Colors.white70,
+                    ),
+                    maxLines: 5,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Price, Duration, and Rating
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Price and Duration
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '\$${course.price}',
+                            style: const TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.greenAccent,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            course.duration ?? 'Duration not specified',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Average Rating
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Rating: ${course.averageRating?.toStringAsFixed(1) ?? 'N/A'} / 5',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (course.averageRating != null)
+                            RatingBarIndicator(
+                              rating: course.averageRating!,
+                              itemBuilder: (context, _) => const Icon(
+                                Icons.star,
+                                color: Colors.amber,
+                              ),
+                              itemCount: 5,
+                              itemSize: 24.0,
+                              direction: Axis.horizontal,
+                            )
+                          else
+                            const Text(
+                              'No Ratings Yet',
+                              style:
+                              TextStyle(fontSize: 14, color: Colors.white70),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 30),
+
+          // Admin Request Section
+          Text(
+            'Request Admin for Enrollment',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.deepPurple[800],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Admin Contact Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.deepPurple[50],
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Admin Contact',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple[800],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.phone, color: Colors.deepPurple),
+                    const SizedBox(width: 12),
+                    Text(
+                      adminPhoneNumber,
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.deepPurple[800],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final Uri phoneUri =
+                          Uri(scheme: 'tel', path: adminPhoneNumber);
+                          if (await canLaunchUrl(phoneUri)) {
+                            await launchUrl(phoneUri);
+                          } else {
+                            _showErrorSnackbar(
+                                'Could not launch phone dialer.');
+                          }
+                        },
+                        icon: const Icon(Icons.call),
+                        label: const Text('Call Admin'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding:
+                          const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final Uri smsUri = Uri(
+                            scheme: 'sms',
+                            path: adminPhoneNumber,
+                            queryParameters: <String, String>{
+                              'body':
+                              'I want to enroll in the course ${_course?.courseTitle ?? 'Unknown'}',
+                            },
+                          );
+                          if (await canLaunchUrl(smsUri)) {
+                            await launchUrl(smsUri);
+                          } else {
+                            _showErrorSnackbar('Could not launch SMS app.');
+                          }
+                        },
+                        icon: const Icon(Icons.message),
+                        label: const Text('Message Admin'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding:
+                          const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 30),
+        ],
+      ),
+    );
+  }
+
+  /// Helper method to show error SnackBar
+  void _showErrorSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// Builds the Lessons (Sections) tab content.
+  Widget _buildSectionsList(Course course) {
+    if (course.sections.isEmpty) {
+      return Center(
+        child: isAdmin
+            ? TextButton(
+          onPressed: () => _showAddSectionDialog(context),
+          child: Text('Add Sections'),
+        )
+            : Text('No sections available.'),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: course.sections.length,
+      itemBuilder: (context, index) {
+        final section = course.sections[index];
+        return _buildSectionCard(section, index);
+      },
+    );
+  }
+
+  /// Builds individual section cards with expandable content.
+  Widget _buildSectionCard(Section section, int sectionIndex) {
+    return Card(
+      elevation: 4,
+      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0)),
+      child: ExpansionTile(
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              section.sectionTitle ?? 'Untitled Section',
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            if (isAdmin)
+              Row(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.edit),
+                    onPressed: () =>
+                        _showEditSectionDialog(section, sectionIndex),
+                    tooltip: 'Edit Section',
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.delete),
+                    onPressed: () =>
+                        _confirmDeleteSection(sectionIndex, section),
+                    tooltip: 'Delete Section',
+                  ),
+                ],
+              ),
+          ],
+        ),
+        children: [
+          if (section.videos.isNotEmpty)
+            ...section.videos.asMap().entries.map((entry) {
+              int videoIndex = entry.key;
+              Video video = entry.value;
+
+              // Determine if the current video is the first video in the course
+              bool isFirstVideo = sectionIndex == 0 && videoIndex == 0;
+
+              // Determine if the user can access the video
+              bool canAccessVideo = isFirstVideo || isEnrolled || isAdmin;
+
+              return ListTile(
+                leading: Icon(
+                  isFirstVideo
+                      ? Icons.lock_open
+                      : Icons.lock, // Open lock for free video
+                  color: isFirstVideo
+                      ? Colors.green
+                      : (canAccessVideo ? Colors.blueAccent : Colors.redAccent),
+                ),
+                title: Text(video.title ?? 'Untitled Video'),
+                subtitle: Text(
+                    isFirstVideo ? 'Free Preview' : (canAccessVideo ? 'Available to Play' : 'Enroll to Play')),
+                onTap: () {
+                  if (canAccessVideo) {
+                    _playVideo(video.videoUrl ?? '', sectionIndex, videoIndex);
+                  } else {
+                    _showEnrollPrompt();
+                  }
+                },
+                trailing: isAdmin
+                    ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon:
+                      Icon(Icons.edit, color: Colors.blueAccent),
+                      onPressed: () => _showEditVideoDialog(
+                          section.sectionTitle!, video, videoIndex),
+                      tooltip: 'Edit Video',
+                    ),
+                    IconButton(
+                      icon:
+                      Icon(Icons.delete, color: Colors.redAccent),
+                      onPressed: () => _deleteVideo(
+                          widget.courseId, section.sectionTitle ?? '', videoIndex),
+                      tooltip: 'Delete Video',
+                    ),
+                  ],
+                )
+                    : null, // Hide edit/delete buttons if not Admin
+              );
+            }).toList()
+          else
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Center(child: Text('No videos available')),
+            ),
+          if (isAdmin)
+            TextButton.icon(
+              onPressed: () =>
+                  _showAddVideoDialog(widget.courseId, section.sectionTitle ?? ''),
+              icon: Icon(Icons.add, color: Colors.teal),
+              label: Text('Add Video'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Shows a prompt to enroll when trying to access restricted videos.
+  void _showEnrollPrompt() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Enroll to Access'),
+          content: Text('You need to enroll in this course to access this video.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _confirmEnroll();
+              },
+              child: Text('Enroll Now'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Plays the selected video using the YouTube player.
+  void _playVideo(String videoUrl, int sectionIndex, int videoIndex) {
+    String? videoId = YoutubePlayer.convertUrlToId(videoUrl);
+    if (videoId != null) {
+      setState(() {
+        if (_youtubeController != null) {
+          _youtubeController!.load(videoId);
+        } else {
+          _youtubeController = YoutubePlayerController(
+            initialVideoId: videoId,
+            flags: const YoutubePlayerFlags(
+              autoPlay: true,
+              mute: false,
+              enableCaption: true,
+              isLive: false,
+            ),
+          );
+        }
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invalid video URL.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// Shows a dialog to edit the course details.
+  void _showEditCourseDialog(BuildContext context, Course course) {
+    final TextEditingController titleController =
+    TextEditingController(text: course.courseTitle);
+    final TextEditingController descriptionController =
+    TextEditingController(text: course.description);
+    final TextEditingController priceController =
+    TextEditingController(text: course.price.toString());
+    final TextEditingController subjectController =
+    TextEditingController(text: course.subject);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Edit Course'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Course Title',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Course Description',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: priceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Course Price',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: subjectController,
+                  decoration: const InputDecoration(
+                    labelText: 'Subject',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
+            TextButton(
+              onPressed: () async {
+                // Validate and save course details
+                if (titleController.text.isNotEmpty &&
+                    descriptionController.text.isNotEmpty &&
+                    priceController.text.isNotEmpty) {
+                  setState(() {
+                    isActionLoading = true;
+                  });
+
+                  // Update the course object with new values
+                  final updatedCourse = Course(
+                    id: course.id,
+                    courseTitle: titleController.text,
+                    description: descriptionController.text,
+                    price: double.tryParse(priceController.text) ?? course.price,
+                    subject: subjectController.text,
+                    duration: course.duration,
+                    instructor: course.instructor,
+                    averageRating: course.averageRating,
+                    enrolledUserIds: course.enrolledUserIds,
+                    sections: course.sections,
+                    feedbacks: course.feedbacks,
+                  );
+
+                  // Update in the provider
+                  await Provider.of<CourseProvider>(context, listen: false)
+                      .updateCourse(updatedCourse);
+
+                  setState(() {
+                    isActionLoading = false;
+                  });
+
+                  Navigator.pop(context);
+
+                  // Show a success message
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Course updated successfully!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+
+                  // Refresh course data
+                  await _initializeCourse();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Please fill out all fields')));
+                }
+              },
+              child: isActionLoading
+                  ? SpinKitDoubleBounce(color: Colors.white)
+                  : const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Shows a dialog to add feedback.
+  void _showAddFeedbackDialog(BuildContext context, String courseId) {
+    final _formKey = GlobalKey<FormState>();
+    final TextEditingController _feedbackController = TextEditingController();
+    double _currentRating = 3.0;
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Edit Video'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _videoTitleController,
-              decoration: InputDecoration(
-                  labelText: 'Video Title', hintText: 'Enter new video title'),
+        title: const Text('Add Feedback'),
+        content: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                // Feedback Text
+                TextFormField(
+                  controller: _feedbackController,
+                  decoration: const InputDecoration(
+                    labelText: 'Your Feedback',
+                    hintText: 'Enter your thoughts...',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLength: 150,
+                  maxLines: 3,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter your feedback.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                // Rating Bar
+                Text(
+                  'Rate this course:',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                ),
+                const SizedBox(height: 5),
+                RatingBar.builder(
+                  initialRating: _currentRating,
+                  minRating: 1,
+                  direction: Axis.horizontal,
+                  allowHalfRating: true,
+                  itemCount: 5,
+                  itemPadding:
+                  const EdgeInsets.symmetric(horizontal: 4.0),
+                  itemBuilder: (context, _) => const Icon(
+                    Icons.star,
+                    color: Colors.amber,
+                  ),
+                  onRatingUpdate: (rating) {
+                    _currentRating = rating;
+                  },
+                ),
+              ],
             ),
-            TextField(
-              controller: _videoUrlController,
-              decoration: InputDecoration(
-                  labelText: 'Video URL', hintText: 'Enter new YouTube URL'),
-            ),
-          ],
+          ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           TextButton(
-            onPressed: () {
-              if (_videoTitleController.text.isNotEmpty &&
-                  _videoUrlController.text.isNotEmpty) {
+            onPressed: () async {
+              if (_formKey.currentState!.validate()) {
                 final courseProvider =
-                    Provider.of<CourseProvider>(context, listen: false);
-                courseProvider.editVideo(
-                    widget.courseId,
-                    sectionTitle,
-                    videoIndex,
-                    _videoTitleController.text,
-                    _videoUrlController.text);
-                Navigator.pop(context);
-              } else {
+                Provider.of<CourseProvider>(context, listen: false);
+                final authProvider =
+                Provider.of<AuthService>(context, listen: false);
+                final CustomUser? currentUser =
+                await authProvider.getCurrentUser();
+
+                if (currentUser == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('You must be logged in to submit feedback.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                // Check if user has already submitted feedback
+                bool hasFeedback = _course!.feedbacks.any(
+                        (fb) => fb.userId.toString() == currentUser.id);
+                if (hasFeedback) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('You have already submitted feedback.'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  Navigator.pop(context);
+                  return;
+                }
+
+                setState(() {
+                  _isSubmitting = true;
+                });
+
+                final result = await _addFeedback(
+                  courseId,
+                  currentUser.name ?? 'Anonymous',
+                  _feedbackController.text,
+                  currentUser.id!,
+                  _currentRating, // Pass the rating
+                );
+
+                _feedbackController.clear();
+
+                // Show success or error message based on result
                 ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Please fill out all fields')));
+                  SnackBar(
+                    content: Text(
+                      result
+                          ? 'Feedback submitted successfully!'
+                          : 'Failed to submit feedback. Please try again.',
+                    ),
+                    duration: const Duration(seconds: 2),
+                    backgroundColor:
+                    result ? Colors.green : Colors.red,
+                  ),
+                );
+
+                setState(() {
+                  _isSubmitting = false;
+                });
+
+                // Refresh course data
+                await _initializeCourse();
               }
             },
-            child: Text('Save'),
+            child: _isSubmitting
+                ? const SpinKitDoubleBounce(
+              color: Colors.white,
+              size: 20.0,
+            )
+                : const Text('Submit'),
           ),
         ],
       ),
     );
   }
 
-  void _confirmDeleteSection(int sectionIndex, Section section) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) => AlertDialog(
-            title: Text('Delete Section'),
-            content: Text('Are you sure you want to delete this section?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                // Close the dialog
-                child: Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  setState(() => isActionLoading = true); // Start loading
-                  _deleteSection(
-                      sectionIndex, section); // Proceed to delete the section
-                  setState(() => isActionLoading = false); // End loading
-                  Navigator.of(context).pop(); // Close the dialog
-                },
-                child: isActionLoading
-                    ? SpinKitDoubleBounce(
-                        color: Colors.white,
-                      ) // Show loader during the action
-                    : Text('Delete'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  /// Adds feedback to the course.
+  Future<bool> _addFeedback(
+      String courseId,
+      String userName,
+      String feedbackText,
+      String userId,
+      double rating,
+      ) async {
+    try {
+      final courseProvider =
+      Provider.of<CourseProvider>(context, listen: false);
+      // Check if user has already submitted feedback
+      bool hasFeedback = _course!.feedbacks
+          .any((fb) => fb.userId.toString() == userId);
+      if (hasFeedback) {
+        // Optionally, update existing feedback instead of adding a new one
+        // Implement update logic if needed
+        return false; // Indicate failure to add duplicate feedback
+      }
+      await courseProvider.addFeedback(courseId, userId, feedbackText,
+          userName, rating);
+      return true;
+    } catch (e) {
+      print("Error adding feedback: $e");
+      return false;
+    }
   }
 
+  /// Builds the Feedbacks tab content.
   Widget _buildFeedbackTab(BuildContext context) {
     return FutureBuilder<CustomUser?>(
-      future: Provider.of<CourseProvider>(context, listen: false).getCurrentUser(), // Get the current user asynchronously
-      builder: (BuildContext context, AsyncSnapshot<CustomUser?> snapshot) {
+      future:
+      Provider.of<AuthService>(context, listen: false).getCurrentUser(),
+      builder:
+          (BuildContext context, AsyncSnapshot<CustomUser?> snapshot) {
         // Handle different states based on the snapshot status
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: SpinKitDoubleBounce(color: Colors.blueAccent), // While loading
-          );
+          return const Center(
+            child: SpinKitDoubleBounce(color: Colors.blueAccent),
+          ); // While loading
         } else if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}')); // Error state
         } else if (!snapshot.hasData) {
-          return Center(child: Text('No user data available')); // No user available
+          return const Center(child: Text('No user data available')); // No user available
         } else {
-          final currentUser = snapshot.data; // Get the user data from snapshot
+          final currentUser = snapshot.data!; // Get the user data from snapshot
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildFeedbackForm(currentUser!),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: _buildFeedbackList(currentUser),
+              // Average Rating Display
+              Text(
+                'Average Rating: ${_course!.averageRating?.toStringAsFixed(1) ?? 'N/A'} / 5',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
+              if (_course!.averageRating != null)
+                RatingBarIndicator(
+                  rating: _course!.averageRating!,
+                  itemBuilder: (context, _) => const Icon(
+                    Icons.star,
+                    color: Colors.amber,
+                  ),
+                  itemCount: 5,
+                  itemSize: 24.0,
+                  direction: Axis.horizontal,
+                )
+              else
+                const Text(
+                  'No Ratings Yet',
+                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+              const SizedBox(height: 10),
+              // Add Feedback Button if enrolled/Admin and hasn't submitted
+              if ((isEnrolled || isAdmin) &&
+                  !_course!.feedbacks.any(
+                          (fb) => fb.userId.toString() == currentUser.id))
+                _buildFeedbackForm(currentUser),
+              const SizedBox(height: 10),
+              // All Feedbacks List
+              Expanded(
+                child: _buildAllFeedbacks(currentUser),
               ),
             ],
           );
@@ -801,280 +1542,262 @@ class _CourseScreenState extends State<CourseScreen>
     );
   }
 
+  /// Builds the existing feedback display.
+  Widget _buildAllFeedbacks(CustomUser currentUser) {
+    if (_course!.feedbacks.isEmpty) {
+      return const Center(child: Text('No feedbacks yet.'));
+    }
 
-  bool _isSubmitting =
-      false; // Add this state variable to track submission status
-
-  Widget _buildFeedbackForm(CustomUser user) {
-    final TextEditingController _feedbackController = TextEditingController();
-
-    return Card(
-      elevation: 5,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12.0),
-      ),
-      margin: EdgeInsets.all(16.0),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView( // Wrap the content in SingleChildScrollView
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'We value your feedback!',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blueAccent,
-                ),
-              ),
-              SizedBox(height: 10),
-              TextField(
-                controller: _feedbackController,
-                decoration: InputDecoration(
-                  labelText: 'Your Feedback',
-                  hintText: 'Enter your thoughts...',
-                  hintStyle: TextStyle(color: Colors.grey[400]),
-                  prefixIcon: Icon(Icons.feedback, color: Colors.blueAccent),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12.0),
-                    borderSide: BorderSide(color: Colors.blueAccent, width: 1.0),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12.0),
-                    borderSide: BorderSide(color: Colors.blueAccent, width: 1.0),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12.0),
-                    borderSide: BorderSide(color: Colors.blueAccent, width: 2.0),
-                  ),
-                ),
-                maxLength: 150,
-                maxLines: 2,
-              ),
-              SizedBox(height: 8),
-              // Display character limit below the text field
-              Text(
-                '${_feedbackController.text.length}/150 characters',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-              SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: _isSubmitting
-                    ? null
-                    : () async {
-                  if (_feedbackController.text.isNotEmpty) {
-                    setState(() {
-                      _isSubmitting = true;
-                    });
-
-                    final result = await _addFeedback(
-                      _course!.id!,
-                      user.name!,
-                      _feedbackController.text,
-                      user.id!,
-                    );
-                    _feedbackController.clear();
-
-                    // Show success or error message based on result
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          result // Assuming _addFeedback returns a success message
-                              ? 'Feedback submitted successfully!'
-                              : 'Failed to submit feedback. Please try again.',
-                        ),
-                        duration: Duration(seconds: 2),
-                        backgroundColor:
-                        result ? Colors.green : Colors.red,
-                      ),
-                    );
-
-                    setState(() {
-                      _isSubmitting = false;
-                    });
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
-                  backgroundColor:
-                  _isSubmitting ? Colors.grey : Colors.blueAccent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30.0),
-                  ),
-                  elevation: 3,
-                ),
-                child: _isSubmitting
-                    ? SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(color: Colors.white),
-                )
-                    : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.send, color: Colors.white),
-                    // Icon for submit button
-                    SizedBox(width: 8),
-                    // Space between icon and text
-                    Text(
-                      'Submit Feedback',
-                      style: TextStyle(fontSize: 16, color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-
-  Widget _buildFeedbackList(CustomUser currentUser) {
     return ListView.builder(
       itemCount: _course!.feedbacks.length,
       itemBuilder: (context, index) {
         final feedback = _course!.feedbacks[index];
+        return _buildFeedbackCard(feedback, currentUser);
+      },
+    );
+  }
 
-        return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance
-              .collection('users')
-              .doc(feedback.userId)
-              .get(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Center(child: CircularProgressIndicator());
-            }
+  /// Builds individual feedback cards.
+  Widget _buildFeedbackCard(FeedBack feedback, CustomUser currentUser) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('users')
+          .doc(feedback.userId.toString()) // Ensure userId is a string
+          .get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-            if (snapshot.hasError) {
-              return Center(child: Text('Error fetching user'));
-            }
+        if (snapshot.hasError) {
+          return const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Center(child: Text('Error fetching user')),
+          );
+        }
 
-            if (!snapshot.hasData || snapshot.data == null) {
-              return Center(child: Text('User data not available'));
-            }
+        if (!snapshot.hasData || snapshot.data == null) {
+          return const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Center(child: Text('User data not available')),
+          );
+        }
 
-            final userData = snapshot.data!.data() as Map<String, dynamic>?;
+        final userData = snapshot.data!.data() as Map<String, dynamic>?;
 
-            final userName = userData?['name'] ?? 'Unknown User';
-            final isOwnerOrAdmin = feedback.userId == currentUser.id ||
-                currentUser.role == 'Admin';
+        final userName = userData?['name'] ?? 'Unknown User';
+        final userProfileImageUrl = userData?['profileImageUrl'];
 
-            // Format date
-            final formattedDate =
-                DateFormat('yMMMd').format(feedback.date!.toDate());
+        final isOwnerOrAdmin = feedback.userId.toString() == currentUser.id ||
+            isAdmin;
 
-            // Highlight current user feedback
-            final isCurrentUserFeedback = feedback.userId == currentUser.id;
+        // Format date
+        final formattedDate =
+        DateFormat('yMMMd').format(feedback.date!.toDate());
 
-            return Card(
-              margin: const EdgeInsets.all(8.0),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15.0)),
-              elevation: 3,
-              color: isCurrentUserFeedback
-                  ? Colors.lightBlue.shade50
-                  : Colors.white,
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: NetworkImage(userData?['profileImageUrl'] ??
-                          "https://via.placeholder.com/150"), // Replace with your placeholder URL
-                    ),
-                    title: Text(feedback.feedback,
-                        maxLines: 2, overflow: TextOverflow.ellipsis),
-                    subtitle: Text('Posted by $userName on $formattedDate'),
-                    trailing: isOwnerOrAdmin
-                        ? PopupMenuButton(
-                            onSelected: (value) {
-                              if (value == 'edit') {
-                                _showEditFeedbackDialog(feedback, index);
-                              } else if (value == 'delete') {
-                                _deleteFeedback(_course!.id!, index);
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: ElevatedButton(
-                                  onPressed: () {
-                                    _showEditFeedbackDialog(feedback, index);
-                                  },
-                                  child: Text('Edit'),
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: ElevatedButton(
-                                  onPressed: () {
-                                    _deleteFeedback(_course!.id!, index);
-                                  },
-                                  child: Text('Delete'),
-                                ),
-                              ),
-                            ],
-                          )
-                        : null,
+        // Highlight current user's feedback
+        final isCurrentUserFeedback = feedback.userId.toString() == currentUser.id;
+
+        return Card(
+          margin: const EdgeInsets.symmetric(
+              vertical: 8.0, horizontal: 16.0),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15.0)),
+          elevation: 3,
+          color: isCurrentUserFeedback
+              ? Colors.lightBlue.shade50
+              : Colors.white,
+          child: Column(
+            children: [
+              ListTile(
+                leading: CachedNetworkImage(
+                  imageUrl: userProfileImageUrl ??
+                      "https://via.placeholder.com/150",
+                  imageBuilder: (context, imageProvider) => CircleAvatar(
+                    backgroundImage: imageProvider,
                   ),
-                  Divider(), // Add a divider for visual separation
-                ],
+                  placeholder: (context, url) => const CircleAvatar(
+                    backgroundColor: Colors.grey,
+                    child: SpinKitDoubleBounce(
+                        color: Colors.blueAccent, size: 20.0),
+                  ),
+                  errorWidget: (context, url, error) => const CircleAvatar(
+                    backgroundImage:
+                    AssetImage('assets/images/placeholder.png'),
+                  ),
+                ),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        feedback.feedback ?? 'No feedback provided.',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Handle null ratings by providing a default value or hiding the RatingBar
+                    if (feedback.rating != null)
+                      RatingBarIndicator(
+                        rating: feedback.rating!,
+                        itemBuilder: (context, _) => const Icon(
+                          Icons.star,
+                          color: Colors.amber,
+                        ),
+                        itemCount: 5,
+                        itemSize: 16.0,
+                        direction: Axis.horizontal,
+                      )
+                    else
+                      const Text(
+                        'No Rating',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                  ],
+                ),
+                subtitle:
+                Text('Posted by $userName on $formattedDate'),
+                trailing: isOwnerOrAdmin
+                    ? PopupMenuButton(
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      _showEditFeedbackDialog(feedback, userName);
+                    } else if (value == 'delete') {
+                      _deleteFeedback(_course!.id!, feedback);
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Text('Edit'),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Delete'),
+                    ),
+                  ],
+                )
+                    : null,
               ),
-            );
-          },
+              const Divider(), // Add a divider for visual separation
+            ],
+          ),
         );
       },
     );
   }
 
-
-  Future<bool> _addFeedback(String courseId, String userName, String feedbackText, String userId) async {
-    try {
-      // Add feedback to the Firestore collection (or wherever you're storing it)
-      final newFeedback = FeedBack(
-        userId: userId,
-        userName: userName,
-        feedback: feedbackText,
-      );
-
-      setState(() {
-        Provider.of<CourseProvider>(context, listen: false)
-            .addFeedback(courseId, userId, feedbackText, userName);
-      });
-      return true; // Return true on success
-    } catch (error) {
-      print("Failed to add feedback: $error");
-      return false; // Return false on error
-    }
-  }
-
-  void _showEditFeedbackDialog(FeedBack feedback, int index) {
+  /// Shows a dialog to edit existing feedback.
+  void _showEditFeedbackDialog(FeedBack feedback, String userName) {
     final TextEditingController _feedbackController =
-        TextEditingController(text: feedback.feedback);
+    TextEditingController(text: feedback.feedback);
+    double _currentRating = feedback.rating ?? 3.0; // Safeguard against null
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('Edit Feedback'),
-          content: TextField(
-            controller: _feedbackController,
-            maxLines: 2,
-            decoration: InputDecoration(labelText: 'Your Feedback'),
+          title: const Text('Edit Feedback'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _feedbackController,
+                maxLines: 2,
+                decoration:
+                const InputDecoration(labelText: 'Your Feedback'),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Rate this course:',
+                style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+              ),
+              const SizedBox(height: 5),
+              RatingBar.builder(
+                initialRating: _currentRating,
+                minRating: 1,
+                direction: Axis.horizontal,
+                allowHalfRating: true,
+                itemCount: 5,
+                itemPadding:
+                const EdgeInsets.symmetric(horizontal: 4.0),
+                itemBuilder: (context, _) => const Icon(
+                  Icons.star,
+                  color: Colors.amber,
+                ),
+                onRatingUpdate: (rating) {
+                  _currentRating = rating;
+                },
+              ),
+            ],
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
             TextButton(
-              onPressed: () {
-                setState(() {
-                  _course!.feedbacks[index].feedback = _feedbackController.text;
-                });
-                Navigator.pop(context);
+              onPressed: () async {
+                if (_feedbackController.text.isNotEmpty) {
+                  setState(() {
+                    _isSubmitting = true;
+                  });
+
+                  try {
+                    final courseProvider =
+                    Provider.of<CourseProvider>(context, listen: false);
+                    // Update the feedback
+                    await courseProvider.updateFeedback(
+                        _course!.id!,
+                        feedback.userId.toString(),
+                        _feedbackController.text,
+                        _currentRating);
+
+                    setState(() {
+                      _isSubmitting = false;
+                    });
+
+                    Navigator.pop(context);
+
+                    // Show success message
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content:
+                        const Text('Feedback updated successfully!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+
+                    // Refresh course data
+                    await _initializeCourse();
+                  } catch (e) {
+                    print("Error updating feedback: $e");
+                    setState(() {
+                      _isSubmitting = false;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Failed to update feedback. Please try again.'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content:
+                          Text('Please fill out all fields')));
+                }
               },
-              child: Text('Save'),
+              child: _isSubmitting
+                  ? const SpinKitDoubleBounce(
+                color: Colors.white,
+                size: 20.0,
+              )
+                  : const Text('Save'),
             ),
           ],
         );
@@ -1082,22 +1805,24 @@ class _CourseScreenState extends State<CourseScreen>
     );
   }
 
-  void _deleteFeedback(String courseId, int index) async {
+  /// Deletes a specific feedback entry.
+  void _deleteFeedback(String courseId, FeedBack feedback) async {
     // Show a confirmation dialog before deletion
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Confirm Deletion'),
-          content: Text('Are you sure you want to delete this feedback?'),
+          title: const Text('Confirm Deletion'),
+          content:
+          const Text('Are you sure you want to delete this feedback?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: Text('Cancel'),
+              child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: Text('Delete'),
+              child: const Text('Delete'),
             ),
           ],
         );
@@ -1107,11 +1832,437 @@ class _CourseScreenState extends State<CourseScreen>
     // If the user confirms deletion, proceed with deletion
     if (shouldDelete == true) {
       setState(() {
-        // Call the provider method to delete feedback
-        Provider.of<CourseProvider>(context, listen: false)
-            .deleteFeedback(courseId, index);
+        _isSubmitting = true; // Start loading
       });
+      try {
+        final courseProvider =
+        Provider.of<CourseProvider>(context, listen: false);
+        // Pass userId as String without casting to int
+        await courseProvider.deleteFeedback(
+            courseId, feedback.userId.toString() as int);
+
+        setState(() {
+          _isSubmitting = false; // End loading
+        });
+
+        // Refresh course data
+        await _initializeCourse();
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Feedback deleted successfully.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        print("Error deleting feedback: $e");
+        setState(() {
+          _isSubmitting = false; // End loading
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Failed to delete feedback. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
+  /// Builds the feedback submission form.
+  Widget _buildFeedbackForm(CustomUser user) {
+    return Card(
+      elevation: 5,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'We value your feedback!',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.blueAccent,
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _feedbackController,
+              decoration: const InputDecoration(
+                labelText: 'Your Feedback',
+                hintText: 'Enter your thoughts...',
+                prefixIcon:
+                Icon(Icons.feedback, color: Colors.blueAccent),
+                border: OutlineInputBorder(
+                  borderRadius:
+                  BorderRadius.all(Radius.circular(12.0)),
+                  borderSide: BorderSide(
+                      color: Colors.blueAccent, width: 1.0),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius:
+                  BorderRadius.all(Radius.circular(12.0)),
+                  borderSide: BorderSide(
+                      color: Colors.blueAccent, width: 1.0),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius:
+                  BorderRadius.all(Radius.circular(12.0)),
+                  borderSide: BorderSide(
+                      color: Colors.blueAccent, width: 2.0),
+                ),
+              ),
+              maxLength: 150,
+              maxLines: 2,
+            ),
+            const SizedBox(height: 10),
+            // Star Rating Input
+            Text(
+              'Rate this course:',
+              style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+            ),
+            const SizedBox(height: 5),
+            RatingBar.builder(
+              initialRating: _currentRating,
+              minRating: 1,
+              direction: Axis.horizontal,
+              allowHalfRating: true,
+              itemCount: 5,
+              itemPadding:
+              const EdgeInsets.symmetric(horizontal: 4.0),
+              itemBuilder: (context, _) => const Icon(
+                Icons.star,
+                color: Colors.amber,
+              ),
+              onRatingUpdate: (rating) {
+                setState(() {
+                  _currentRating = rating;
+                });
+              },
+            ),
+            const SizedBox(height: 10),
+            // Display character limit below the text field
+            Text(
+              '${_feedbackController.text.length}/150 characters',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 10),
+            ElevatedButton(
+              onPressed: _isSubmitting
+                  ? null
+                  : () async {
+                if (_feedbackController.text.isNotEmpty) {
+                  setState(() {
+                    _isSubmitting = true;
+                  });
+
+                  final result = await _addFeedback(
+                    _course!.id!,
+                    user.name ?? 'Anonymous',
+                    _feedbackController.text,
+                    user.id!,
+                    _currentRating, // Pass the rating
+                  );
+                  _feedbackController.clear();
+
+                  // Show success or error message based on result
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        result
+                            ? 'Feedback submitted successfully!'
+                            : 'Failed to submit feedback. Please try again.',
+                      ),
+                      duration: const Duration(seconds: 2),
+                      backgroundColor:
+                      result ? Colors.green : Colors.red,
+                    ),
+                  );
+
+                  setState(() {
+                    _isSubmitting = false;
+                  });
+
+                  // Refresh course data
+                  await _initializeCourse();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content:
+                          Text('Please fill out all fields')));
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                    vertical: 12.0, horizontal: 16.0),
+                backgroundColor:
+                _isSubmitting ? Colors.grey : Colors.blueAccent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30.0),
+                ),
+                elevation: 3,
+              ),
+              child: _isSubmitting
+                  ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2.0,
+                ),
+              )
+                  : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.send, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text(
+                    'Submit Feedback',
+                    style: TextStyle(
+                        fontSize: 16, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+
+  /// Builds the floating action button for adding feedback.
+  FloatingActionButton? _buildFloatingActionButton() {
+    // Only show FAB to Admins or enrolled users
+    return (isEnrolled || isAdmin)
+        ? FloatingActionButton.extended(
+      onPressed: () {
+        _showAddFeedbackDialog(context, _course!.id ?? '');
+      },
+      icon: Icon(Icons.feedback),
+      label: Text('Add Feedback'),
+      backgroundColor: Colors.teal,
+      tooltip: 'Add Feedback',
+    )
+        : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading || isCheckingEnrollment) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Course Details')),
+        body: Center(
+            child: SpinKitDoubleBounce(
+              color: Colors.blueAccent,
+            )),
+      );
+    }
+
+    return SafeArea(
+      child: YoutubePlayerBuilder(
+        player: YoutubePlayer(
+          controller: _youtubeController ??
+              YoutubePlayerController(
+                initialVideoId: '', // Empty controller if not initialized
+                flags: const YoutubePlayerFlags(
+                  autoPlay: false,
+                  mute: false,
+                  enableCaption: true,
+                  isLive: false,
+                ),
+              ),
+          showVideoProgressIndicator: true,
+          onReady: () => print("Player is ready"),
+          onEnded: (metaData) => print("Video has ended"),
+        ),
+        builder: (context, player) {
+          return Scaffold(
+            appBar: AppBar(
+              title: Text(_course!.courseTitle ?? 'Course Details'),
+              backgroundColor: Colors.blueAccent,
+              actions: [
+                if (isAdmin)
+                  IconButton(
+                    icon: Icon(Icons.edit, semanticLabel: 'Edit Course'),
+                    onPressed: () =>
+                        _showEditCourseDialog(context, _course!),
+                  ),
+                if (isAdmin)
+                  IconButton(
+                    icon: Icon(Icons.delete, semanticLabel: 'Delete Course'),
+                    onPressed: () async {
+                      bool confirm = await _showDeleteConfirmation(context);
+                      if (confirm) {
+                        await Provider.of<CourseProvider>(context,
+                            listen: false)
+                            .deleteCourse(_course!.id!);
+                        Navigator.pop(context);
+                      }
+                    },
+                  ),
+                if (isAdmin)
+                  IconButton(
+                    icon: Icon(Icons.add, semanticLabel: 'Add Section'),
+                    onPressed: () => _showAddSectionDialog(context),
+                  ),
+                // Removed Unenroll Button from Admins as per requirement
+              ],
+            ),
+            body: Column(
+              children: [
+                // Video Player Logic
+                if ((isEnrolled || isAdmin) && _youtubeController != null)
+                  Hero(
+                    tag: 'videoHero',
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16.0),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: player,
+                      ),
+                    ),
+                  )
+                else if (isAdmin &&
+                    _course!.sections.isNotEmpty &&
+                    _course!.sections.first.videos.isNotEmpty)
+                // Show first video for Admins regardless of enrollment
+                  Hero(
+                    tag: 'videoHero',
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16.0),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: YoutubePlayer(
+                          controller: _youtubeController ??
+                              YoutubePlayerController(
+                                initialVideoId: YoutubePlayer.convertUrlToId(
+                                    _course!.sections.first.videos.first.videoUrl!) ??
+                                    '',
+                                flags: const YoutubePlayerFlags(
+                                  autoPlay: false,
+                                  mute: false,
+                                  enableCaption: true,
+                                  isLive: false,
+                                ),
+                              ),
+                          showVideoProgressIndicator: true,
+                          onReady: () {
+                            if (_youtubeController == null) {
+                              _initializeYoutubePlayer(
+                                  _course!.sections.first.videos.first.videoUrl);
+                            }
+                          },
+                          onEnded: (metaData) => print("Video has ended"),
+                        ),
+                      ),
+                    ),
+                  )
+                else if (!isEnrolled && !isAdmin)
+                  // Show only first video for all users
+                    (_course!.sections.isNotEmpty &&
+                        _course!.sections.first.videos.isNotEmpty)
+                        ? Hero(
+                      tag: 'videoHero',
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16.0),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: YoutubePlayer(
+                            controller: YoutubePlayerController(
+                              initialVideoId: YoutubePlayer.convertUrlToId(
+                                  _course!.sections.first.videos.first.videoUrl!) ??
+                                  '',
+                              flags: const YoutubePlayerFlags(
+                                autoPlay: false,
+                                mute: false,
+                                enableCaption: true,
+                                isLive: false,
+                              ),
+                            ),
+                            showVideoProgressIndicator: true,
+                            onReady: () => print("Player is ready"),
+                            onEnded: (metaData) =>
+                                print("Video has ended"),
+                          ),
+                        ),
+                      ),
+                    )
+                        : Container(
+                      height: 200,
+                      color: Colors.black12,
+                      child: Center(
+                        child: Text(
+                          'No videos available.',
+                          style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ),
+                const SizedBox(height: 10),
+                // Tab Bar
+                TabBar(
+                  controller: _tabController,
+                  indicatorColor: const Color(0xFF3F51B5),
+                  labelColor: Colors.black,
+                  unselectedLabelColor: Colors.grey,
+                  tabs: (isEnrolled || isAdmin)
+                      ? const [
+                    Tab(text: "Overview"),
+                    Tab(text: "Lessons"),
+                    Tab(text: "Feedback"),
+                  ]
+                      : const [
+                    Tab(text: "Overview"),
+                    Tab(text: "Feedback"),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Tab Views
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: (isEnrolled || isAdmin)
+                        ? [
+                      _buildOverview(_course!),
+                      _buildSectionsList(_course!),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: _buildFeedbackTab(context),
+                      ),
+                    ]
+                        : [
+                      _buildOverview(_course!),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: _buildFeedbackTab(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            floatingActionButton: _buildFloatingActionButton(),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Checks if the current user is an Admin.
+  bool _isAdmin() {
+    final authProvider =
+    Provider.of<AuthService>(context, listen: false);
+    return authProvider.user?.role == 'Admin';
+  }
 }

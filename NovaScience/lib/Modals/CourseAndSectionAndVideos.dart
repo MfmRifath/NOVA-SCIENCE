@@ -1,24 +1,117 @@
+// CourseAndSectionAndVideos.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+class Course {
+  String? id;
+  String? courseTitle;
+  String? description;
+  double? price;
+  String? subject;
+  String? imageUrl;
+  String? status;
+  String? duration;
+  String? instructor;
+  double? averageRating;
+  List<String>? enrolledUserIds;
+  List<Section> sections;
+  List<FeedBack> feedbacks;
 
+  Course({
+    this.id,
+    this.courseTitle,
+    this.description,
+    this.price,
+    this.subject,
+    this.duration,
+    this.imageUrl,
+    this.instructor,
+    this.averageRating = 0.0,
+    this.enrolledUserIds,
+    this.status,
+    this.sections = const [],
+    this.feedbacks = const [],
+  });
 
-
-// Define the Video class
-class Video {
-  String title;
-  String videoUrl;
-
-  Video({required this.title, required this.videoUrl});
-
-  // Method to create a Video from a map
-  factory Video.fromMap(Map<String, dynamic> data) {
-    return Video(
-      title: data['title'] ?? '',
-      videoUrl: data['videoUrl'] ?? '',
+  factory Course.fromMap(Map<String, dynamic> data, String documentId) {
+    return Course(
+      id: documentId,
+      courseTitle: data['courseTitle'],
+      description: data['description'],
+      price: data['price']?.toDouble(),
+      imageUrl: data['imageUrl'],
+      subject: data['subject'],
+      duration: data['duration'],
+      status: data['status'],
+      instructor: data['instructor'],
+      averageRating: data['averageRating']?.toDouble() ?? 0.0,
+      enrolledUserIds: List<String>.from(data['enrolledUserIds'] ?? []),
+      sections: (data['sections'] as List<dynamic>?)
+          ?.map((section) => Section.fromMap(section))
+          .toList() ??
+          [],
+      feedbacks: (data['feedbacks'] as List<dynamic>?)
+          ?.map((fb) => FeedBack.fromMap(fb))
+          .toList() ??
+          [],
     );
   }
 
-  // Convert Video to a map
+  Map<String, dynamic> toMap() {
+    return {
+      'courseTitle': courseTitle,
+      'description': description,
+      'price': price,
+      'subject': subject,
+      'duration': duration,
+      'instructor': instructor,
+      'averageRating': averageRating,
+      'status':status,
+      'imageUrl': imageUrl,
+      'enrolledUserIds': enrolledUserIds ?? [],
+      'sections': sections.map((s) => s.toMap()).toList(),
+      'feedbacks': feedbacks.map((fb) => fb.toMap()).toList(),
+    };
+  }
+}
+
+class Section {
+  String? sectionTitle;
+  List<Video> videos;
+
+  Section({this.sectionTitle, this.videos = const []});
+
+  factory Section.fromMap(Map<String, dynamic> data) {
+    return Section(
+      sectionTitle: data['sectionTitle'],
+      videos: (data['videos'] as List<dynamic>?)
+          ?.map((video) => Video.fromMap(video))
+          .toList() ??
+          [],
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'sectionTitle': sectionTitle,
+      'videos': videos.map((v) => v.toMap()).toList(),
+    };
+  }
+}
+
+class Video {
+  String? title;
+  String? videoUrl;
+
+  Video({this.title, this.videoUrl});
+
+  factory Video.fromMap(Map<String, dynamic> data) {
+    return Video(
+      title: data['title'],
+      videoUrl: data['videoUrl'],
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'title': title,
@@ -27,153 +120,38 @@ class Video {
   }
 }
 
-// Define the Section class
-class Section {
-  String sectionTitle;
-  List<Video> videos;
-
-  Section({required this.sectionTitle, required this.videos});
-
-  factory Section.fromMap(Map<String, dynamic> data) {
-    var videosData = data['videos'] ?? [];
-    List<Video> videoList = List<Video>.from(
-      videosData.map((videoData) => Video.fromMap(videoData)),
-    );
-
-    return Section(
-      sectionTitle: data['sectionTitle'] ?? '',
-      videos: videoList,
-    );
-  }
-
-  // Convert Section to a map
-  Map<String, dynamic> toMap() {
-    return {
-      'sectionTitle': sectionTitle,
-      'videos': videos.map((video) => video.toMap()).toList(),
-    };
-  }
-}
-// Define the Section class
-// Define the FeedBack class
 class FeedBack {
-  String userId;
-  String userName;
-  String feedback;
+  String? userId;
+  String? userName;
+  String? feedback;
+  double? rating;
   Timestamp? date;
 
-  FeedBack({required this.userName, required this.feedback, this.date, required this.userId});
-
-  // Method to create FeedBack from a map
-  factory FeedBack.fromMap(Map<String, dynamic> data) {
-    return FeedBack(
-      userName: data['userName'] ?? '',
-      feedback: data['feedback'] ?? '',
-      date: data['date'] ?? '',
-      userId: data['userId']
-
-    );
-  }
-
-  // Convert FeedBack to a map
-  Map<String, dynamic> toMap() {
-    return {
-      'userName': userName,
-      'feedback': feedback,
-      'date':date,
-      'userId':userId
-    };
-  }
-}
-
-// Updated Course class
-class Course {
-  String? id; // Document ID
-  String? courseTitle;
-  String? description;
-  double? price;
-  DateTime? startDate;
-  DateTime? endDate;
-  String? instructor;
-  String? duration;
-  String? imageUrl;
-  List<Section> sections;
-  List<FeedBack> feedbacks; // Feedback list
-  String? status;
-  String? subject;
-
-  Course({
-    this.id,
-    this.courseTitle,
-    this.description,
-    this.price,
-    this.startDate,
-    this.endDate,
-    this.instructor,
-    this.duration,
-    this.imageUrl,
-    this.sections = const [],
-    this.status,
-    this.subject,
-    this.feedbacks = const [], // Initialize feedbacks
+  FeedBack({
+    this.userId,
+    this.userName,
+    this.feedback,
+    this.rating,
+    this.date,
   });
 
-  // Method to create a Course from a map
-  factory Course.fromMap(Map<String, dynamic> data, String? documentId) {
-    // Parse sections
-    List<Section> sectionList = [];
-    if (data['sections'] is List) {
-      sectionList = (data['sections'] as List).map((sectionData) {
-        if (sectionData is Map<String, dynamic>) {
-          return Section.fromMap(sectionData);
-        }
-        return null;
-      }).whereType<Section>().toList();
-    }
-
-    // Parse feedbacks
-    List<FeedBack> feedbackList = [];
-    if (data['feedbacks'] is List) {
-      feedbackList = (data['feedbacks'] as List).map((feedbackData) {
-        if (feedbackData is Map<String, dynamic>) {
-          return FeedBack.fromMap(feedbackData);
-        }
-        return null;
-      }).whereType<FeedBack>().toList();
-    }
-
-    return Course(
-      id: documentId,
-      courseTitle: data['courseTitle'] as String?,
-      description: data['description'] as String?,
-      price: (data['price'] as num?)?.toDouble(),
-      startDate: (data['startDate'] as Timestamp?)?.toDate(),
-      endDate: (data['endDate'] as Timestamp?)?.toDate(),
-      instructor: data['instructor'] as String?,
-      duration: data['duration'] as String?,
-      imageUrl: data['imageUrl'] as String?,
-      status: data['status'] as String?,
-      subject: data['subject'] as String?,
-      sections: sectionList,
-      feedbacks: feedbackList, // Assign parsed feedbacks
+  factory FeedBack.fromMap(Map<String, dynamic> data) {
+    return FeedBack(
+      userId: data['userId'],
+      userName: data['userName'],
+      feedback: data['feedback'],
+      rating: data['rating']?.toDouble(),
+      date: data['date'],
     );
   }
 
-  // Convert Course to a map
   Map<String, dynamic> toMap() {
     return {
-      'courseTitle': courseTitle,
-      'description': description,
-      'price': price,
-      'startDate': startDate != null ? Timestamp.fromDate(startDate!) : null,
-      'endDate': endDate != null ? Timestamp.fromDate(endDate!) : null,
-      'instructor': instructor,
-      'duration': duration,
-      'imageUrl': imageUrl,
-      'status': status,
-      'sections': sections.map((section) => section.toMap()).toList(),
-      'feedbacks': feedbacks.map((feedback) => feedback.toMap()).toList(), // Map feedbacks
-      'subject': subject,
+      'userId': userId,
+      'userName': userName,
+      'feedback': feedback,
+      'rating': rating,
+      'date': date,
     };
   }
 }

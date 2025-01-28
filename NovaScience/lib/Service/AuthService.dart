@@ -1,12 +1,13 @@
+// AuthService.dart
+
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/cupertino.dart';
-
 import '../Modals/User.dart';
 
-class AuthService extends ChangeNotifier {
+class AuthService with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -17,7 +18,7 @@ class AuthService extends ChangeNotifier {
   // Public getter for the current Firebase user
   User? get currentUser => _auth.currentUser;
 
-  // Check if the current user is an admin
+  /// Checks if the current user has an Admin role.
   Future<bool> isAdmin() async {
     if (currentUser != null) {
       final userData = await getUserData(currentUser!.uid);
@@ -28,10 +29,11 @@ class AuthService extends ChangeNotifier {
     return false;
   }
 
+  /// Retrieves user data from Firestore based on UID.
   Future<Map<String, dynamic>?> getUserData(String uid) async {
     try {
       DocumentSnapshot doc =
-      await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      await _firestore.collection('users').doc(uid).get();
       return doc.data() as Map<String, dynamic>?;
     } catch (e) {
       print(e);
@@ -39,7 +41,7 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // Sign up method with additional fields
+  /// Signs up a new user with email and password, including additional profile details.
   Future<void> signUpWithEmail({
     required String name,
     required String email,
@@ -51,7 +53,8 @@ class AuthService extends ChangeNotifier {
     File? profileImage,
   }) async {
     try {
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      UserCredential userCredential =
+      await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -68,6 +71,7 @@ class AuthService extends ChangeNotifier {
         bio: bio,
         isLoggedin: true,
         registeredDate: Timestamp.now(),
+        enrolledCourses: [],
       );
 
       // Upload profile image to Firebase Storage
@@ -84,21 +88,25 @@ class AuthService extends ChangeNotifier {
         'name': name,
         'email': email,
         'role': 'User',
-        'profileImageUrl': profileImageUrl ?? "https://via.placeholder.com/150",
+        'profileImageUrl':
+        profileImageUrl ?? "https://via.placeholder.com/150",
         'phoneNumber': phoneNumber,
         'location': location,
         'birthday': birthday,
         'bio': bio,
         'isLoggedin': true,
         'registeredDate': Timestamp.now(),
+        'enrolledCourses': [], // Initialize enrolledCourses as empty list
       });
 
-      notifyListeners(); // Notify after user is created
+      notifyListeners(); // Notify listeners after user is created
     } catch (e) {
       print('Error signing up: $e');
+      // Optionally, handle errors by rethrowing or using another mechanism
     }
   }
 
+  /// Adds a user with specified role. Typically used by Admins.
   Future<void> addUser({
     required String name,
     required String email,
@@ -111,7 +119,8 @@ class AuthService extends ChangeNotifier {
     File? profileImage,
   }) async {
     try {
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      UserCredential userCredential =
+      await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -128,6 +137,7 @@ class AuthService extends ChangeNotifier {
         bio: bio,
         isLoggedin: true,
         registeredDate: Timestamp.now(),
+        enrolledCourses: [],
       );
 
       // Upload profile image to Firebase Storage
@@ -144,74 +154,102 @@ class AuthService extends ChangeNotifier {
         'name': name,
         'email': email,
         'role': role,
-        'profileImageUrl': profileImageUrl ?? "https://via.placeholder.com/150",
+        'profileImageUrl':
+        profileImageUrl ?? "https://via.placeholder.com/150",
         'phoneNumber': phoneNumber,
         'location': location,
         'birthday': birthday,
         'bio': bio,
         'isLoggedin': true,
         'registeredDate': Timestamp.now(),
+        'enrolledCourses': [],
       });
 
-      notifyListeners(); // Notify after user is created
+      notifyListeners(); // Notify listeners after user is created
     } catch (e) {
       print('Error adding user: $e');
+      // Optionally, handle errors by rethrowing or using another mechanism
     }
   }
 
-  Future<Map<String, dynamic>?> getCurrentUserData() async {
-    User? user = _auth.currentUser;
-    if (user != null) {
-      DocumentSnapshot doc = await _firestore.collection('users').doc(user.uid).get();
-      notifyListeners(); // Notify listeners after fetching user data
-      return doc.data() as Map<String, dynamic>?;
+  /// Retrieves the current authenticated user's data from Firestore.
+  Future<CustomUser?> getCurrentUser() async {
+    try {
+      User? user = _auth.currentUser;
+
+      if (user != null) {
+        DocumentSnapshot doc =
+        await _firestore.collection('users').doc(user.uid).get();
+
+        if (doc.exists) {
+          _user = CustomUser.fromMap(
+              doc.data() as Map<String, dynamic>, doc.id);
+          notifyListeners();
+          return _user;
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error fetching current user: $e');
+      return null;
     }
-    return null;
   }
 
+  /// Updates the user's profile with new data and optionally a new profile image.
   Future<void> updateUser({
     required Map<String, dynamic> updatedData,
-    required File? newProfileImage,
+    File? newProfileImage,
   }) async {
     User? user = _auth.currentUser;
     if (user != null) {
-      await _firestore.collection('users').doc(user.uid).update(updatedData);
+      try {
+        await _firestore.collection('users').doc(user.uid).update(updatedData);
 
-      if (newProfileImage != null) {
-        TaskSnapshot uploadTask = await _storage
-            .ref('profile_images/${user.uid}')
-            .putFile(newProfileImage);
-        String newProfileImageUrl = await uploadTask.ref.getDownloadURL();
-        await _firestore.collection('users').doc(user.uid).update({
-          'profileImageUrl': newProfileImageUrl,
-        });
+        if (newProfileImage != null) {
+          TaskSnapshot uploadTask = await _storage
+              .ref('profile_images/${user.uid}')
+              .putFile(newProfileImage);
+          String newProfileImageUrl = await uploadTask.ref.getDownloadURL();
+          await _firestore.collection('users').doc(user.uid).update({
+            'profileImageUrl': newProfileImageUrl,
+          });
+        }
+
+        // Refresh local user data
+        await getCurrentUser();
+
+        notifyListeners(); // Notify after updating user
+      } catch (e) {
+        print('Error updating user: $e');
+        // Optionally, handle errors by rethrowing or using another mechanism
       }
-
-      notifyListeners(); // Notify after updating user
     }
   }
 
+  /// Deletes the currently authenticated user's account.
   Future<void> deleteUser() async {
     User? user = _auth.currentUser;
     if (user != null) {
       try {
-        var profileImageUrl = (await _firestore.collection('users').doc(user.uid).get())
-            .data()?['profileImageUrl'];
-        if (profileImageUrl != null) {
+        var userDoc = await _firestore.collection('users').doc(user.uid).get();
+        var profileImageUrl = userDoc.data()?['profileImageUrl'];
+        if (profileImageUrl != null && profileImageUrl.isNotEmpty) {
           await _storage.refFromURL(profileImageUrl).delete();
         }
 
         await _firestore.collection('users').doc(user.uid).delete();
         await user.delete();
 
-        _user = null; // Clear current user
+        _user = null; // Clear local user data
         notifyListeners(); // Notify after deleting user
       } catch (e) {
         print('Error deleting user: $e');
+        // Optionally, handle errors by rethrowing or using another mechanism
       }
     }
   }
 
+  /// Signs out the current user.
   Future<void> signOut() async {
     try {
       User? user = currentUser;
@@ -222,21 +260,25 @@ class AuthService extends ChangeNotifier {
       }
 
       await _auth.signOut();
+      _user = null; // Clear local user data
+      notifyListeners(); // Notify after signing out
     } catch (e) {
       print("Error signing out: $e");
+      // Optionally, handle errors by rethrowing or using another mechanism
     }
   }
 
+  /// Retrieves the current user's email.
   Future<String?> getCurrentUserEmail() async {
     User? user = _auth.currentUser;
-    notifyListeners(); // Notify after fetching current user's email
     return user?.email;
   }
 
+  /// Fetches a user's document by UID.
   Future<DocumentSnapshot> getUser(String uid) async {
     try {
-      DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
-      notifyListeners(); // Notify after fetching user data
+      DocumentSnapshot doc =
+      await _firestore.collection('users').doc(uid).get();
       return doc;
     } catch (e) {
       print('Error fetching user: $e');
@@ -244,10 +286,10 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  /// Fetches all users from Firestore.
   Future<List<DocumentSnapshot>> getAllUsers() async {
     try {
       QuerySnapshot querySnapshot = await _firestore.collection('users').get();
-      notifyListeners(); // Notify after fetching all users
       return querySnapshot.docs;
     } catch (e) {
       print('Error fetching users: $e');
@@ -255,13 +297,13 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  /// Searches users by their name.
   Future<List<DocumentSnapshot>> searchUsersByName(String name) async {
     try {
       QuerySnapshot querySnapshot = await _firestore
           .collection('users')
           .where('name', isEqualTo: name)
           .get();
-      notifyListeners(); // Notify after searching users
       return querySnapshot.docs;
     } catch (e) {
       print('Error searching users by name: $e');
@@ -269,9 +311,13 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  /// Deletes a user by their email.
   Future<void> deleteUserByEmail(String email) async {
     try {
-      final userQuery = await _firestore.collection('users').where('email', isEqualTo: email).get();
+      final userQuery = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .get();
 
       if (userQuery.docs.isEmpty) {
         print('No user found with this email.');
@@ -282,7 +328,7 @@ class AuthService extends ChangeNotifier {
       final uid = userDoc.id;
 
       final profileImageUrl = userDoc.data()['profileImageUrl'];
-      if (profileImageUrl != null) {
+      if (profileImageUrl != null && profileImageUrl.isNotEmpty) {
         await _storage.refFromURL(profileImageUrl).delete();
       }
 
@@ -292,36 +338,126 @@ class AuthService extends ChangeNotifier {
       if (user != null && user.uid == uid) {
         await user.delete();
       } else {
-        UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-            email: email, password: 'userPassword');
-        await userCredential.user!.delete();
+        // If the user to delete is not the current user, you might need Admin privileges
+        // This part requires additional implementation based on your authentication flow
       }
 
       notifyListeners(); // Notify after deleting user by email
     } catch (e) {
       print('Error deleting user by email: $e');
+      // Optionally, handle errors by rethrowing or using another mechanism
     }
   }
 
+  /// Deletes a user by their UID.
   Future<void> deleteUserById(String userId) async {
     try {
-      var profileImageUrl = (await _firestore.collection('users').doc(userId).get())
-          .data()?['profileImageUrl'];
-      if (profileImageUrl != null) {
+      var userDoc = await _firestore.collection('users').doc(userId).get();
+      var profileImageUrl = userDoc.data()?['profileImageUrl'];
+      if (profileImageUrl != null && profileImageUrl.isNotEmpty) {
         await _storage.refFromURL(profileImageUrl).delete();
       }
 
       await _firestore.collection('users').doc(userId).delete();
+
+      // If the deleted user is the current user, sign them out
+      User? user = _auth.currentUser;
+      if (user != null && user.uid == userId) {
+        await _auth.signOut();
+        _user = null;
+      }
+
       notifyListeners(); // Notify after deleting user by ID
     } catch (e) {
       print('Error deleting user by ID: $e');
+      // Optionally, handle errors by rethrowing or using another mechanism
     }
   }
 
+  /// Updates a user's data by their email.
+  Future<void> updateUserByEmail({
+    required String email,
+    required Map<String, dynamic> updatedData,
+  }) async {
+    try {
+      final userQuery = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .get();
+
+      if (userQuery.docs.isEmpty) {
+        print('No user found with this email.');
+        return;
+      }
+
+      final userDoc = userQuery.docs.first;
+      await _firestore.collection('users').doc(userDoc.id).update(updatedData);
+      notifyListeners(); // Notify after updating user by email
+    } catch (e) {
+      print('Error updating user by email: $e');
+      // Optionally, handle errors by rethrowing or using another mechanism
+    }
+  }
+
+  /// Fetches a user with their enrolled courses based on UID.
+  Future<CustomUser?> fetchUserWithCourses(String userId) async {
+    try {
+      DocumentSnapshot userDoc =
+      await _firestore.collection('users').doc(userId).get();
+
+      if (userDoc.exists) {
+        return CustomUser.fromMap(
+          userDoc.data() as Map<String, dynamic>,
+          userDoc.id,
+        );
+      } else {
+        print('User not found');
+        return null;
+      }
+    } catch (e) {
+      print('Error fetching user: $e');
+      return null;
+    }
+  }
+
+  /// Retrieves all users enrolled in a specific course.
+  Future<List<CustomUser>> getUsersEnrolledInCourse(String courseId) async {
+    List<CustomUser> enrolledStudents = [];
+    try {
+      // Fetch users where 'enrolledCourses' contains courseId
+      QuerySnapshot query = await _firestore
+          .collection('users')
+          .where('enrolledCourses', arrayContains: courseId)
+          .get();
+
+      for (var doc in query.docs) {
+        // Convert each user document into a CustomUser
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        enrolledStudents.add(CustomUser.fromMap(data, doc.id));
+      }
+    } catch (e) {
+      print('Error fetching enrolled students: $e');
+    }
+    return enrolledStudents;
+  }
+
+  /// Deletes a file from Firebase Storage based on its URL.
+  Future<void> deleteFileByUrl(String url) async {
+    try {
+      await _storage.refFromURL(url).delete();
+      notifyListeners(); // Notify after deleting a file
+    } catch (e) {
+      print('Error deleting file by URL: $e');
+      // Optionally, handle errors by rethrowing or using another mechanism
+    }
+  }
+
+  /// Fetches all users from Firestore and converts them to CustomUser objects.
   Future<List<CustomUser>> fetchAllUsers() async {
     List<CustomUser> users = [];
     try {
-      QuerySnapshot querySnapshot = await _firestore.collection('users').get();
+      QuerySnapshot querySnapshot =
+      await _firestore.collection('users').get();
       for (var doc in querySnapshot.docs) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
         users.add(CustomUser(
@@ -334,43 +470,16 @@ class AuthService extends ChangeNotifier {
           location: data['location'],
           birthday: data['birthday'],
           bio: data['bio'],
-          isLoggedin: data['isLoggedin'],
+          isLoggedin: data['isLoggedin'] ?? false,
           registeredDate: data['registeredDate'],
+          enrolledCourses: List<String>.from(data['enrolledCourses'] ?? []),
         ));
       }
       notifyListeners(); // Notify after fetching all users
     } catch (e) {
       print('Error fetching all users: $e');
+      // Optionally, handle errors by rethrowing or using another mechanism
     }
     return users;
-  }
-
-  Future<void> deleteFileByUrl(String url) async {
-    try {
-      await _storage.refFromURL(url).delete();
-      notifyListeners(); // Notify after deleting a file
-    } catch (e) {
-      print('Error deleting file by URL: $e');
-    }
-  }
-
-  Future<void> updateUserByEmail({
-    String? email,
-    Map<String, dynamic>? updatedData,
-  }) async {
-    try {
-      final userQuery = await _firestore.collection('users').where('email', isEqualTo: email).get();
-
-      if (userQuery.docs.isEmpty) {
-        print('No user found with this email.');
-        return;
-      }
-
-      final userDoc = userQuery.docs.first;
-      await _firestore.collection('users').doc(userDoc.id).update(updatedData!);
-      notifyListeners(); // Notify after updating user by email
-    } catch (e) {
-      print('Error updating user by email: $e');
-    }
   }
 }

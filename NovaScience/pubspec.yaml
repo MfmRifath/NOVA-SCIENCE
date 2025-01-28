@@ -50,6 +50,13 @@ dependencies:
   google_sign_in: ^6.2.1
   flutter_facebook_auth: ^7.1.1
   flutter_spinkit: ^5.2.1
+  firebase_app_check: ^0.3.2
+  url_launcher: ^6.3.1
+  flutter_speed_dial: ^7.0.0
+  flutter_rating_bar: ^4.0.1
+  cached_network_image: ^3.4.1
+  dropdown_search: ^5.0.3
+  pull_to_refresh: ^2.0.0
 
 dev_dependencies:
   flutter_test:

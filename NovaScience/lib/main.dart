@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:nova_science/Screens/AdminPanal/EnrollUsersScreen.dart';
 import 'package:nova_science/Screens/StartScreen/HomeScreen.dart';
 import 'package:nova_science/Screens/StartScreen/ProfileScreen.dart';
 import 'package:nova_science/Screens/StartScreen/SignUpScreen.dart';
@@ -57,6 +58,7 @@ class Routes {
   static const String signUp = '/signUp';
   static const String systemSettings = '/systemSettings';
   static const String courseScreen = '/courseScreen';
+  static const String enrollUsersScreen = '/enrollUsers';
 }
 
 class NovaScience extends StatelessWidget {
@@ -86,7 +88,12 @@ class NovaScience extends StatelessWidget {
             builder = (context) => HomePage();
             break;
           case Routes.courseScreen:
-            builder= (context) => CourseScreen(courseId: selectedCourseId!);
+            if (settings.arguments is String) {
+              final courseId = settings.arguments as String;
+              builder = (context) => CourseScreen(courseId: courseId);
+            } else {
+              builder = (context) => const ErrorScreen();
+            }
             break;
           case Routes.editProfile:
             builder = (context) => EditProfileScreen();
@@ -108,6 +115,9 @@ class NovaScience extends StatelessWidget {
             break;
           case Routes.systemSettings:
             builder = (context) => SystemSettingsScreen();
+            break;
+          case Routes.enrollUsersScreen:
+            builder = (context) => EnrollUsersScreen();
             break;
            // Optional: break here for clarity
         }
