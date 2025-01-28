@@ -7,174 +7,154 @@ class JoinScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
       body: SafeArea(
         child: Container(
+          width: double.infinity,
+          height: double.infinity,
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.blue.shade100, Colors.white],
+              colors: [Colors.blueAccent.shade100, Colors.lightBlue.shade50],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             image: DecorationImage(
-              image: AssetImage('assets/images/background.jpg'), // Optional background image
+              image: const AssetImage('assets/images/background.jpg'),
               fit: BoxFit.cover,
-              opacity: 0.1, // Adjust opacity as needed
+              opacity: 0.2, // Ensure the text is always visible
             ),
           ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: <Widget>[
-                SizedBox(height: 40.0), // Top spacing
-
-                // Logo image with Hero animation
-                Hero(
-                  tag: 'logo',
-                  child: AnimatedContainer(
-                    duration: Duration(seconds: 1),
-                    curve: Curves.easeInOut,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              // Top section: Logo
+              Expanded(
+                flex: 4,
+                child: Center(
+                  child: Hero(
+                    tag: 'logo',
                     child: Image.asset(
                       'assets/images/logo.png',
-                      width: screenWidth * 0.6, // Responsive logo size
+                      width: screenWidth * 0.6,
                       height: screenWidth * 0.6,
+                      fit: BoxFit.contain,
                     ),
                   ),
                 ),
+              ),
 
-                SizedBox(height: 30.0), // Spacing after the logo
-
-                // Description text
-                Padding(
+              // Middle section: Text content
+              Expanded(
+                flex: 4,
+                child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Join NOVA SCIENCE to Begin Your Journey!',
+                        'Welcome to NOVA SCIENCE!',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.poppins(
                           textStyle: const TextStyle(
-                            fontSize: 28.0, // Increased for emphasis
+                            fontSize: 28.0,
                             fontWeight: FontWeight.bold,
                             color: Colors.blueAccent,
                           ),
                         ),
                       ),
-                      SizedBox(height: 20.0), // Spacing between title and content
+                      const SizedBox(height: 20.0),
                       Text(
-                        'Start your learning journey with NOVA SCIENCE, where A/L Science and O/L Maths and Science come to life. Our expert-driven courses and resources are designed to help you succeed. Join now and unlock your full potential!',
+                        'Begin your journey with NOVA SCIENCE and unlock your full potential! Explore A/L Science, O/L Maths, and so much more with expertly crafted courses designed just for you.',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.poppins(
                           textStyle: const TextStyle(
-                            fontSize: 16.0, // Increased font size for readability
-                            fontWeight: FontWeight.normal,
+                            fontSize: 16.0,
                             color: Colors.black87,
-                            height: 1.5, // Line height for readability
+                            height: 1.6,
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
+              ),
 
-                SizedBox(height: 40.0), // Spacing before buttons
-
-                // Row of buttons for Sign In and Sign Up
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 30.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.pushNamed(context, '/signIn');
-                          },
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20.0, vertical: 15.0),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12.0),
-                            ),
-                            elevation: 5,
-                            backgroundColor: Colors.blueAccent,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.login), // Icon for Sign In
-                              SizedBox(width: 8), // Space between icon and text
-                              Text(
-                                'Sign In',
-                                style: GoogleFonts.poppins(
-                                  textStyle: const TextStyle(
-                                    fontSize: 18.0, // Slightly larger font
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 10), // Space between buttons
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.pushNamed(context, '/signUp');
-                          },
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20.0, vertical: 15.0),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12.0),
-                            ),
-                            elevation: 5,
-                            backgroundColor: Colors.green, // Button color
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.person_add), // Icon for Sign Up
-                              SizedBox(width: 8), // Space between icon and text
-                              Text(
-                                'Sign Up',
-                                style: GoogleFonts.poppins(
-                                  textStyle: const TextStyle(
-                                    fontSize: 18.0, // Slightly larger font
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                SizedBox(height: 30.0), // Final bottom spacing
-
-                // Optional Footer
-                Padding(
+              // Bottom section: Buttons
+              Expanded(
+                flex: 3,
+                child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Text(
-                    '© 2024 NOVA SCIENCE. All Rights Reserved.',
-                    style: GoogleFonts.poppins(
-                      textStyle: const TextStyle(
-                        fontSize: 14.0,
-                        color: Colors.black54,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/signIn');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: Size(double.infinity, 55),
+                          backgroundColor: Colors.blueAccent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12.0),
+                          ),
+                          elevation: 5,
+                        ),
+                        icon: const Icon(Icons.login, color: Colors.white),
+                        label: Text(
+                          'Sign In',
+                          style: GoogleFonts.poppins(
+                            textStyle: const TextStyle(
+                              fontSize: 18.0,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 15.0),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/signUp');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: Size(double.infinity, 55),
+                          backgroundColor: Colors.green,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12.0),
+                          ),
+                          elevation: 5,
+                        ),
+                        icon: const Icon(Icons.person_add, color: Colors.white),
+                        label: Text(
+                          'Sign Up',
+                          style: GoogleFonts.poppins(
+                            textStyle: const TextStyle(
+                              fontSize: 18.0,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20.0),
+
+                      // Footer
+                      Text(
+                        '© 2024 NOVA SCIENCE. All Rights Reserved.',
+                        style: GoogleFonts.poppins(
+                          textStyle: const TextStyle(
+                            fontSize: 14.0,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

@@ -20,10 +20,12 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
   String _searchQuery = '';
+  bool isAdmin = false; // Admin flag
 
   @override
   void initState() {
     super.initState();
+    _checkAdminStatus(); // Check if the user is an admin
     _searchController.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<CourseProvider>(context, listen: false).fetchCourses();
@@ -40,6 +42,19 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     });
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      setState(() {
+        isAdmin = userDoc.data()?['role'] == 'Admin'; // Check the role field
+
+        // Update pages and titles dynamically based on admin role
+
+      });
+    }
   }
 
   @override
@@ -91,7 +106,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: isAdmin
+          ? FloatingActionButton(
         onPressed: () {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (context) => AddCourseScreen()),
@@ -100,7 +116,8 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Icon(Icons.add),
         backgroundColor: Colors.blueAccent,
         tooltip: 'Add Course',
-      ),
+      )
+          : null, // Show only if the user is an admin
       body: Stack(
         children: [
           _buildBackground(),
@@ -249,12 +266,12 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         final courseTitle = data['courseTitle'] ?? 'Untitled Course';
-        final description = data['description'] ?? 'No description available.';
         final instructor = data['instructor'] ?? 'No instructor specified.';
         final time = data['duration'] ?? 'Duration not specified';
         final imageUrl = data['imageUrl'] ?? 'assets/images/default_image.jpg';
         final rating = data['averageRating'] != null ? double.parse(data['averageRating'].toString()) : 0.0;
         final enrolledCount = data['enrolledUserIds'] != null ? (data['enrolledUserIds'] as List).length : 0;
+        final subject = data['subject'] ?? 'Subject not specified';
 
         return CourseCard(
           courseTitle: courseTitle,
@@ -270,7 +287,7 @@ class _HomeScreenState extends State<HomeScreen> {
               '/courseScreen',
               arguments: course.id,
             );
-          },
+          }, subject: subject,
         );
       },
     );

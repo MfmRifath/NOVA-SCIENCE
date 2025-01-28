@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart'; // For custom fonts
+import 'package:google_fonts/google_fonts.dart';
+
+import 'AccountSettingsScreen.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -46,8 +48,6 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -57,7 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             fontSize: 22,
           ),
         ),
-        centerTitle: true, // Center the app bar title
+        centerTitle: true,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -72,17 +72,13 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   icon: Icons.account_circle,
                   title: 'Account Settings',
                   subtitle: 'Manage your account information',
-                  onTap: () {
-                    // Handle Account Settings Tap
-                  },
+                  onTap: () => _navigateToAccountSettings(),
                 ),
                 _buildSettingsTile(
                   icon: Icons.password,
                   title: 'Change Password',
                   subtitle: 'Update your password',
-                  onTap: () {
-                    // Handle Change Password Tap
-                  },
+                  onTap: () => _navigateToChangePassword(),
                 ),
                 Divider(),
                 _buildSectionHeader('Preferences'),
@@ -90,17 +86,13 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   icon: Icons.notifications,
                   title: 'Notifications',
                   subtitle: 'Manage notification settings',
-                  onTap: () {
-                    // Handle Notifications Tap
-                  },
+                  onTap: () => _navigateToNotifications(),
                 ),
                 _buildSettingsTile(
                   icon: Icons.language,
                   title: 'Language',
                   subtitle: 'Select your preferred language',
-                  onTap: () {
-                    // Handle Language Selection Tap
-                  },
+                  onTap: () => _showLanguageDialog(),
                 ),
                 Divider(),
                 _buildSectionHeader('Security'),
@@ -108,9 +100,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   icon: Icons.security,
                   title: 'Privacy & Security',
                   subtitle: 'Adjust security settings',
-                  onTap: () {
-                    // Handle Privacy & Security Tap
-                  },
+                  onTap: () => _navigateToPrivacySettings(),
                 ),
                 Divider(),
                 _buildSectionHeader('Support'),
@@ -118,9 +108,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   icon: Icons.help,
                   title: 'Help & Support',
                   subtitle: 'Get help and send feedback',
-                  onTap: () {
-                    // Handle Help & Support Tap
-                  },
+                  onTap: () => _navigateToHelpSupport(),
                 ),
               ],
             ),
@@ -173,6 +161,129 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       ),
       tileColor: Theme.of(context).cardColor,
       hoverColor: Colors.blue.shade50,
+    );
+  }
+
+  /// Navigate to Account Settings
+  void _navigateToAccountSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => AccountSettingsScreen()),
+    );
+  }
+
+  /// Navigate to Change Password Screen
+  void _navigateToChangePassword() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => ChangePasswordScreen()),
+    );
+  }
+
+  /// Navigate to Notifications Screen
+  void _navigateToNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => NotificationsSettingsScreen()),
+    );
+  }
+
+  /// Show Language Selection Dialog
+  void _showLanguageDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Select Language'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text('English'),
+              onTap: () {
+                Navigator.of(context).pop();
+                // Update language preference here
+              },
+            ),
+            ListTile(
+              title: Text('Spanish'),
+              onTap: () {
+                Navigator.of(context).pop();
+                // Update language preference here
+              },
+            ),
+            ListTile(
+              title: Text('French'),
+              onTap: () {
+                Navigator.of(context).pop();
+                // Update language preference here
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Navigate to Privacy & Security Screen
+  void _navigateToPrivacySettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => PrivacySettingsScreen()),
+    );
+  }
+
+  /// Navigate to Help & Support Screen
+  void _navigateToHelpSupport() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => HelpSupportScreen()),
+    );
+  }
+}
+
+/// Placeholder for Account Settings Screen
+
+
+/// Placeholder for Change Password Screen
+class ChangePasswordScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Change Password')),
+      body: Center(child: Text('Change Password Screen')),
+    );
+  }
+}
+
+/// Placeholder for Notifications Settings Screen
+class NotificationsSettingsScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Notifications Settings')),
+      body: Center(child: Text('Notifications Settings Screen')),
+    );
+  }
+}
+
+/// Placeholder for Privacy Settings Screen
+class PrivacySettingsScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Privacy & Security')),
+      body: Center(child: Text('Privacy & Security Screen')),
+    );
+  }
+}
+
+/// Placeholder for Help & Support Screen
+class HelpSupportScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Help & Support')),
+      body: Center(child: Text('Help & Support Screen')),
     );
   }
 }

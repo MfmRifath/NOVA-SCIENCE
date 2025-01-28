@@ -6,6 +6,7 @@ class CourseCard extends StatelessWidget {
   final String time;
   final String instructor;
   final String imageUrl;
+  final String subject;
   final String id;
   final double rating;
   final int enrolledCount;
@@ -18,6 +19,7 @@ class CourseCard extends StatelessWidget {
     required this.instructor,
     required this.imageUrl,
     required this.id,
+    required this. subject,
     required this.rating,
     required this.enrolledCount,
     required this.onTap,
@@ -87,7 +89,17 @@ class CourseCard extends StatelessWidget {
                     SizedBox(height: 4),
                     // Instructor Name
                     Text(
-                      'By $instructor',
+                      instructor,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      subject,
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade600,

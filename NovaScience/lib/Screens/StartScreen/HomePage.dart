@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../AdminPanal/AdminPanelScreen.dart';
 import 'HomeScreen.dart';
@@ -10,24 +12,51 @@ class HomePage extends StatefulWidget {
   _HomePageState createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
+  final PageController _pageController = PageController();
+  bool isAdmin = false;
 
-  final List<Widget> _pages = [
-    HomeScreen(),       // Home
-    ProfileScreen(),    // Profile
-    SettingsScreen(),   // Settings
-    AdminPanelScreen(), // Admin Panel
+  final List<Widget> _commonPages = [
+    HomeScreen(), // Home
+    ProfileScreen(), // Profile
+    SettingsScreen(), // Settings
   ];
 
-  final List<String> _titles = [
+  final List<String> _commonTitles = [
     'Home',
     'Profile',
     'Settings',
-    'Admin Panel',
   ];
 
-  final PageController _pageController = PageController();
+  List<Widget> _pages = [];
+  List<String> _titles = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAdminStatus();
+  }
+
+  /// Check if the current user has the admin role
+  Future<void> _checkAdminStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      setState(() {
+        isAdmin = userDoc.data()?['role'] == 'Admin'; // Check the role field
+
+        // Update pages and titles dynamically based on admin role
+        _pages = List.from(_commonPages);
+        _titles = List.from(_commonTitles);
+
+        if (isAdmin) {
+          _pages.add(AdminPanelScreen()); // Add Admin Panel
+          _titles.add('Admin Panel');
+        }
+      });
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -52,7 +81,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       // AppBar with dynamic titles based on the selected page
       appBar: AppBar(
         title: Text(
-          _titles[_selectedIndex],
+          _titles.isNotEmpty ? _titles[_selectedIndex] : '',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
         elevation: 0,
@@ -84,43 +113,42 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           selectedFontSize: 14,
           unselectedFontSize: 12,
           iconSize: 26,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings_outlined),
-              activeIcon: Icon(Icons.settings),
-              label: 'Settings',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.admin_panel_settings_outlined),
-              activeIcon: Icon(Icons.admin_panel_settings),
-              label: 'Admin',
-            ),
-          ],
+          items: _buildBottomNavigationBarItems(),
         ),
       ),
-
-      // Optional: Floating Action Button for Quick Actions
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-        onPressed: () {
-          // Implement quick action
-        },
-        backgroundColor: Colors.blueAccent,
-        child: Icon(Icons.add, color: Colors.white),
-        tooltip: 'Quick Action',
-      )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
+  }
+
+  /// Build BottomNavigationBar items dynamically based on admin role
+  List<BottomNavigationBarItem> _buildBottomNavigationBarItems() {
+    final List<BottomNavigationBarItem> items = [
+      BottomNavigationBarItem(
+        icon: Icon(Icons.home_outlined),
+        activeIcon: Icon(Icons.home),
+        label: 'Home',
+      ),
+      BottomNavigationBarItem(
+        icon: Icon(Icons.person_outline),
+        activeIcon: Icon(Icons.person),
+        label: 'Profile',
+      ),
+      BottomNavigationBarItem(
+        icon: Icon(Icons.settings_outlined),
+        activeIcon: Icon(Icons.settings),
+        label: 'Settings',
+      ),
+    ];
+
+    if (isAdmin) {
+      items.add(
+        BottomNavigationBarItem(
+          icon: Icon(Icons.admin_panel_settings_outlined),
+          activeIcon: Icon(Icons.admin_panel_settings),
+          label: 'Admin',
+        ),
+      );
+    }
+
+    return items;
   }
 }
