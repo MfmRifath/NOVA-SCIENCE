@@ -458,26 +458,95 @@ class CourseProvider with ChangeNotifier {
     }
   }
 
-
-// Delete feedback method
-  Future<void> deleteFeedback(String courseId, int feedbackIndex) async {
+  // Update Feedback
+  Future<void> updateFeedback(
+      String courseId,
+      String userId,
+      String newFeedbackText,
+      double newRating,
+      ) async {
     try {
-      // Fetch the course
-      Course? course = await getCourseById(courseId);
+      print("Starting feedback update for userId: $userId in courseId: $courseId");
 
-      if (course != null && feedbackIndex >= 0 &&
-          feedbackIndex < course.feedbacks.length) {
-        // Remove the feedback from the course
-        course.feedbacks.removeAt(feedbackIndex);
+      DocumentReference courseRef = _firestore.collection('courses').doc(courseId);
 
-        // Update Firestore with the modified course data
-        await updateCourse(course);
-        notifyListeners();
-      } else {
-        print('Invalid feedback index or course not found');
-      }
+      await _firestore.runTransaction((transaction) async {
+        // Fetch the course document
+        DocumentSnapshot courseSnapshot = await transaction.get(courseRef);
+        if (!courseSnapshot.exists) {
+          throw Exception("Course not found");
+        }
+
+        Map<String, dynamic>? courseData = courseSnapshot.data() as Map<String, dynamic>?;
+        List<dynamic> feedbacks = courseData?['feedbacks'] ?? [];
+
+        // Find the index of the feedback to update
+        int feedbackIndex = feedbacks.indexWhere((fb) => fb['userId'] == userId);
+        if (feedbackIndex == -1) {
+          throw Exception("Feedback not found for user");
+        }
+
+        print("Feedback found at index: $feedbackIndex");
+
+        // Retrieve the old rating to adjust the average
+        double oldRating = (feedbacks[feedbackIndex]['rating'] ?? 0).toDouble();
+
+        // Update the feedback fields with client-side timestamp
+        feedbacks[feedbackIndex]['feedback'] = newFeedbackText;
+        feedbacks[feedbackIndex]['rating'] = newRating;
+        feedbacks[feedbackIndex]['date'] = Timestamp.fromDate(DateTime.now());
+
+        print("Feedback fields updated.");
+
+        // Recalculate the average rating
+        double totalRating = 0;
+        for (var fb in feedbacks) {
+          totalRating += (fb['rating'] ?? 0).toDouble();
+        }
+        double newAverage = feedbacks.isNotEmpty ? totalRating / feedbacks.length : 0;
+
+        print("Recalculated average rating: $newAverage");
+
+        // Update the course document with modified feedbacks and new average rating
+        transaction.update(courseRef, {
+          'feedbacks': feedbacks,
+          'averageRating': newAverage,
+        });
+
+        print("Transaction update committed.");
+      });
+
+      print("Feedback update transaction completed successfully.");
+      notifyListeners();
+    } on FirebaseException catch (e) {
+      print("FirebaseException in updateFeedback: ${e.message}");
+      throw e; // Re-throw to handle in UI
+    } catch (e, stackTrace) {
+      print("Error in updateFeedback: $e");
+      print("StackTrace: $stackTrace");
+      throw e; // Re-throw to handle in UI
+    }
+  }
+  // Delete Feedback
+  Future<void> deleteFeedback(String courseId, String userId) async {
+    try {
+      DocumentReference courseRef = _firestore.collection('courses').doc(courseId);
+
+      await _firestore.runTransaction((transaction) async {
+        DocumentSnapshot courseSnapshot = await transaction.get(courseRef);
+        if (!courseSnapshot.exists) {
+          throw Exception("Course does not exist!");
+        }
+
+        List<dynamic> feedbacks = courseSnapshot.get('feedbacks') ?? [];
+
+        // Remove the feedback with matching userId
+        feedbacks.removeWhere((fb) => fb['userId'] == userId);
+
+        transaction.update(courseRef, {'feedbacks': feedbacks});
+      });
     } catch (e) {
-      print('Failed to delete feedback: $e');
+      throw Exception('Failed to delete feedback: $e');
     }
   }
 
@@ -625,31 +694,7 @@ class CourseProvider with ChangeNotifier {
     }
   }
   /// Updates existing feedback for a user.
-  Future<void> updateFeedback(String courseId, String userId, String feedbackText, double rating) async {
-    try {
-      CollectionReference feedbacksRef =
-      _firestore.collection('courses').doc(courseId).collection('feedbacks');
 
-      QuerySnapshot query = await feedbacksRef.where('userId', isEqualTo: userId).get();
-
-      if (query.docs.isNotEmpty) {
-        DocumentReference feedbackDoc = query.docs.first.reference;
-        await feedbackDoc.update({
-          'feedback': feedbackText,
-          'rating': rating,
-          'date': FieldValue.serverTimestamp(),
-        });
-
-        // Optionally, update the course's average rating here
-        await _updateAverageRating(courseId);
-      } else {
-        throw Exception("Feedback not found for user ID: $userId");
-      }
-    } catch (e) {
-      print("Error updating feedback: $e");
-      rethrow;
-    }
-  }
   /// Updates the average rating of a course based on all feedbacks.
   Future<void> _updateAverageRating(String courseId) async {
     try {

@@ -4,10 +4,12 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:liquid_pull_to_refresh/liquid_pull_to_refresh.dart';
 import 'package:nova_science/Screens/AddCourseScreen.dart';
 import 'package:provider/provider.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
-import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:shimmer/shimmer.dart';
 
 import '../../Service/AdvertisementProvider.dart';
 import '../../Service/AuthService.dart';
@@ -46,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (query != _searchQuery) {
         setState(() {
           _searchQuery = query;
+          print("Search Query Updated: $_searchQuery"); // Debug Statement
         });
       }
     });
@@ -57,6 +60,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       setState(() {
         isAdmin = userDoc.data()?['role'] == 'Admin';
+        print("Admin Status: $isAdmin"); // Debug Statement
+      });
+    } else {
+      setState(() {
+        isAdmin = false;
       });
     }
   }
@@ -73,6 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await Provider.of<CourseProvider>(context, listen: false).fetchCourses();
     await Provider.of<AdvertisementProvider>(context, listen: false).fetchAdvertisements();
     _refreshController.refreshCompleted();
+    print("Data Refreshed"); // Debug Statement
   }
 
   Future<List<QueryDocumentSnapshot<Object?>>> _getFilteredCourses(Future<List<QueryDocumentSnapshot<Object?>>?>? futureCourses) async {
@@ -96,6 +105,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final isLoading = courseProvider.isLoading;
     final hasError = courseProvider.hasError;
 
+    print("HomeScreen Build: isLoading=$isLoading, hasError=$hasError"); // Debug Statement
+
     return Scaffold(
       floatingActionButton: isAdmin
           ? FloatingActionButton(
@@ -112,41 +123,66 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Stack(
         children: [
           _buildBackground(),
-          SmartRefresher(
-            controller: _refreshController,
-            onRefresh: _onRefresh,
-            enablePullDown: true,
-            header: WaterDropHeader(
-              complete: Icon(Icons.check, color: Colors.green),
-              failed: Icon(Icons.error, color: Colors.red),
-            ),
-            child: CustomScrollView(
-              slivers: [
-                SliverPadding(
-                  padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate(
-                      [
-                        _buildSearchBar(),
-                        SizedBox(height: 30),
-                        _buildAdvertisementSection(advertisementProvider),
-                        SizedBox(height: 30),
-                        _buildSectionTitle("Free Watching"),
-                        SizedBox(height: 15),
-                        _buildCoursesGrid(isLoading, hasError, courseProvider.getFreeCourses()),
-                        SizedBox(height: 30),
-                        _buildSectionTitle("Premium Courses"),
-                        SizedBox(height: 15),
-                        _buildCoursesGrid(isLoading, hasError, courseProvider.getPremiumCourses()),
-                        SizedBox(height: 30),
-                        _buildSectionTitle("My Courses"),
-                        SizedBox(height: 15),
-                        _buildMyCoursesSection(courseProvider, context),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+          SafeArea(
+            child: LiquidPullToRefresh(
+              onRefresh: _onRefresh,
+              color: Colors.blueAccent,
+              height: 150,
+              backgroundColor: Colors.white.withOpacity(0.9),
+              animSpeedFactor: 2,
+              showChildOpacityTransition: false,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Determine breakpoints
+                  double width = constraints.maxWidth;
+                  int gridCount;
+                  double padding = 16.0;
+                  double sectionTitleFontSize = 22;
+                  double cardAspectRatio = 0.7;  // Reduced from 0.75
+
+                  if (width > 1200) {
+                    gridCount = 6;  // Increased number of columns
+                    padding = 20.0;
+                    sectionTitleFontSize = 24;
+                    cardAspectRatio = 0.65;  // More narrow aspect ratio
+                  } else if (width > 1000) {
+                    gridCount = 5;
+                    padding = 18.0;
+                    sectionTitleFontSize = 22;
+                    cardAspectRatio = 0.65;
+                  } else if (width > 800) {
+                    gridCount = 4;
+                    padding = 16.0;
+                    sectionTitleFontSize = 20;
+                    cardAspectRatio = 0.65;
+                  } else if (width > 600) {
+                    gridCount = 3;
+                    padding = 14.0;
+                    sectionTitleFontSize = 18;
+                    cardAspectRatio = 0.7;
+                  } else {
+                    gridCount = 2;
+                    padding = 12.0;
+                    sectionTitleFontSize = 16;
+                    cardAspectRatio = 0.75;
+                  }
+                  return CustomScrollView(
+                    slivers: [
+                      SliverPadding(
+                        padding: EdgeInsets.symmetric(horizontal: padding, vertical: 20),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            _buildSearchBar(),
+                            SizedBox(height: 30),
+                            _buildAdvertisementSection(advertisementProvider),
+                            _buildCourseSections(courseProvider, gridCount, cardAspectRatio, sectionTitleFontSize),
+                          ]),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -154,6 +190,253 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildCourseSections(CourseProvider courseProvider, int gridCount, double aspectRatio, double fontSize) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader("Free Courses", Icons.video_library, fontSize),
+        _buildCoursesGrid(courseProvider.getFreeCourses(), gridCount, aspectRatio),
+        _buildSectionHeader("Premium Courses", Icons.workspace_premium, fontSize),
+        _buildCoursesGrid(courseProvider.getPremiumCourses(), gridCount, aspectRatio),
+        _buildSectionHeader("My Learning", Icons.school, fontSize),
+        _buildMyCoursesSection(courseProvider, gridCount, aspectRatio),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon, double fontSize) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 15),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.white, size: fontSize + 4),
+          SizedBox(width: 12),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: Colors.white,
+          hintText: 'Search courses...',
+          prefixIcon: Icon(Icons.search_rounded, color: Colors.blueAccent),
+          suffixIcon: IconButton(
+            icon: Icon(Icons.clear_rounded),
+            onPressed: () => _searchController.clear(),
+          ),
+          contentPadding: EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(30),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(30),
+            borderSide: BorderSide(color: Colors.blueAccent, width: 1.5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCoursesGrid(
+      Future<List<QueryDocumentSnapshot<Object?>>?>? futureCourses,
+      int gridCount,
+      double aspectRatio,
+      ) {
+    return FutureBuilder<List<QueryDocumentSnapshot<Object?>>>(
+      future: _getFilteredCourses(futureCourses),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildShimmerGrid(gridCount);
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return _buildEmptyState(Icons.error_outline, "No courses found");
+        }
+
+        return AnimationLimiter(
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            itemCount: snapshot.data!.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: gridCount,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: aspectRatio,
+            ),
+            itemBuilder: (context, index) {
+              return AnimationConfiguration.staggeredGrid(
+                position: index,
+                duration: const Duration(milliseconds: 500),
+                columnCount: gridCount,
+                child: ScaleAnimation(
+                  child: FadeInAnimation(
+                    child: _buildCourseItem(snapshot.data![index]),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCourseItem(QueryDocumentSnapshot<Object?> course) {
+    final data = course.data() as Map<String, dynamic>;
+    final authService = Provider.of<AuthService>(context, listen: false);
+
+    return FutureBuilder<int>(
+      future: authService.getEnrollmentCount(course.id),
+      builder: (context, snapshot) {
+        return CourseCard(
+          courseTitle: data['courseTitle'] ?? 'New Course',
+          time: data['duration'] ?? 'Self-paced',
+          instructor: data['instructor'] ?? 'Expert Instructor',
+          imageUrl: data['imageUrl'] ?? 'https://via.placeholder.com/150',
+          subject: data['subject'] ?? 'General',
+          id: course.id,
+          rating: (data['averageRating']?.toDouble()) ?? 0.0,
+          enrolledCount: snapshot.data,
+          onTap: () => Navigator.pushNamed(
+            context,
+            '/courseScreen',
+            arguments: course.id,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildShimmerGrid(int gridCount) {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey.shade300,
+      highlightColor: Colors.grey.shade100,
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: NeverScrollableScrollPhysics(),
+        itemCount: gridCount * 2,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: gridCount,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          childAspectRatio: 0.75,
+        ),
+        itemBuilder: (context, index) => Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(IconData icon, String message) {
+    return Container(
+      height: 200,
+      margin: EdgeInsets.symmetric(vertical: 20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 48, color: Colors.white.withOpacity(0.6)),
+          SizedBox(height: 16),
+          Text(
+            message,
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.white.withOpacity(0.8),
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Update advertisement section
+  Widget _buildAdvertisementSection(AdvertisementProvider advertisementProvider) {
+    if (advertisementProvider.isLoading) {
+      return Container(
+        height: 180,
+        margin: EdgeInsets.only(bottom: 30),
+        child: Shimmer.fromColors(
+          baseColor: Colors.grey.shade300,
+          highlightColor: Colors.grey.shade100,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (advertisementProvider.advertisements.isEmpty) return SizedBox();
+
+    return Container(
+      height: 180,
+      margin: EdgeInsets.only(bottom: 30),
+      child: AdvertisementCarousel(advertisements: advertisementProvider.advertisements),
+    );
+  }
+
+  // Update My Courses section
+  Widget _buildMyCoursesSection(CourseProvider courseProvider, int gridCount, double aspectRatio) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    return FutureBuilder<List<QueryDocumentSnapshot<Object?>>?>(
+      future: user != null ? courseProvider.getEnrolledCourses(user.uid) : null,
+      builder: (context, snapshot) {
+        if (user == null) {
+          return _buildEmptyState(
+            Icons.login_rounded,
+            "Sign in to view your courses",
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildShimmerGrid(gridCount);
+        }
+
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return _buildEmptyState(
+            Icons.menu_book_rounded,
+            "Start your learning journey!\nExplore our courses",
+          );
+        }
+
+        return _buildCoursesGrid(Future.value(snapshot.data), gridCount, aspectRatio);
+      },
+    );
+  }
   Widget _buildBackground() {
     return Container(
       decoration: BoxDecoration(
@@ -168,187 +451,5 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildSearchBar() {
-    return TextField(
-      controller: _searchController,
-      decoration: InputDecoration(
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.9),
-        hintText: 'Search courses...',
-        prefixIcon: Icon(Icons.search, color: Colors.blueAccent),
-        contentPadding: EdgeInsets.symmetric(vertical: 15.0, horizontal: 20.0),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(30.0),
-          borderSide: BorderSide(color: Colors.transparent),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(30.0),
-          borderSide: BorderSide(color: Colors.blueAccent),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        SizedBox(height: 4),
-        Container(
-          width: 50,
-          height: 3,
-          color: Colors.blueAccent,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCoursesGrid(bool isLoading, bool hasError, Future<List<QueryDocumentSnapshot<Object?>>?>? futureCourses) {
-    if (isLoading) {
-      return Center(child: CircularProgressIndicator());
-    } else if (hasError) {
-      return Center(
-        child: Text("Failed to load courses.", style: TextStyle(color: Colors.red)),
-      );
-    } else {
-      return FutureBuilder<List<QueryDocumentSnapshot<Object?>>>(
-        future: _getFilteredCourses(futureCourses),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Text("Failed to load courses.", style: TextStyle(color: Colors.red)),
-            );
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(
-              child: Text("No courses found.", style: TextStyle(color: Colors.white)),
-            );
-          }
-          return _buildCoursesGridView(snapshot.data!, context);
-        },
-      );
-    }
-  }
-
-  Widget _buildCoursesGridView(List<QueryDocumentSnapshot<Object?>> courses, BuildContext context) {
-    final authService = Provider.of<AuthService>(context, listen: false);
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      itemCount: courses.length,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: MediaQuery.of(context).size.width > 800 ? 3 : 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.75,
-      ),
-      itemBuilder: (context, index) {
-        final course = courses[index];
-        final data = course.data() as Map<String, dynamic>?;
-
-        if (data == null) {
-          return Container();
-        }
-
-        final courseTitle = data['courseTitle'] ?? 'Untitled Course';
-        final instructor = data['instructor'] ?? 'No instructor specified.';
-        final time = data['duration'] ?? 'Duration not specified';
-        final imageUrl = data['imageUrl'] ?? 'assets/images/default_image.jpg';
-        final rating = data['averageRating'] != null ? double.parse(data['averageRating'].toString()) : 0.0;
-        final subject = data['subject'] ?? 'Subject not specified';
-
-        return FutureBuilder<int>(
-          future: authService.getEnrollmentCount(course.id),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Center(child: CircularProgressIndicator());
-            }
-            final enrolledCount = snapshot.data ?? 0;
-
-            return CourseCard(
-              courseTitle: courseTitle,
-              time: time,
-              instructor: instructor,
-              imageUrl: imageUrl,
-              id: course.id,
-              rating: rating,
-              enrolledCount: enrolledCount,
-              subject: subject,
-              onTap: () {
-                Navigator.pushNamed(
-                  context,
-                  '/courseScreen',
-                  arguments: course.id,
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildMyCoursesSection(CourseProvider courseProvider, BuildContext context) {
-    final User? user = FirebaseAuth.instance.currentUser;
-    final String? currentUserId = user?.uid;
-
-    if (currentUserId == null) {
-      return Center(
-        child: Text(
-          "Please log in to view your courses.",
-          style: TextStyle(color: Colors.white),
-        ),
-      );
-    }
-
-    return FutureBuilder<List<QueryDocumentSnapshot<Object?>>?>(
-      future: courseProvider.getEnrolledCourses(currentUserId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(
-            child: Text("Failed to load your courses.", style: TextStyle(color: Colors.red)),
-          );
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return Center(
-            child: Text(
-              "You have not enrolled in any courses.",
-              style: TextStyle(color: Colors.white),
-            ),
-          );
-        }
-        return _buildCoursesGridView(snapshot.data!, context);
-      },
-    );
-  }
-
-  Widget _buildAdvertisementSection(AdvertisementProvider advertisementProvider) {
-    if (advertisementProvider.isLoading) {
-      return Center(child: CircularProgressIndicator());
-    } else if (advertisementProvider.error != null) {
-      return Center(
-        child: Text(
-          "Failed to load advertisements.",
-          style: TextStyle(color: Colors.red),
-        ),
-      );
-    } else if (advertisementProvider.advertisements.isEmpty) {
-      return SizedBox();
-    } else {
-      return AdvertisementCarousel(advertisements: advertisementProvider.advertisements);
-    }
   }
 }

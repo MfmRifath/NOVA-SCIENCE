@@ -1481,11 +1481,8 @@ class _CourseScreenState extends State<CourseScreen>
   /// Builds the Feedbacks tab content.
   Widget _buildFeedbackTab(BuildContext context) {
     return FutureBuilder<CustomUser?>(
-      future:
-      Provider.of<AuthService>(context, listen: false).getCurrentUser(),
-      builder:
-          (BuildContext context, AsyncSnapshot<CustomUser?> snapshot) {
-        // Handle different states based on the snapshot status
+      future: Provider.of<AuthService>(context, listen: false).getCurrentUser(),
+      builder: (BuildContext context, AsyncSnapshot<CustomUser?> snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
             child: SpinKitDoubleBounce(color: Colors.blueAccent),
@@ -1495,10 +1492,9 @@ class _CourseScreenState extends State<CourseScreen>
         } else if (!snapshot.hasData) {
           return const Center(child: Text('No user data available')); // No user available
         } else {
-          final currentUser = snapshot.data!; // Get the user data from snapshot
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          final currentUser = snapshot.data!;
+          return ListView(
+            padding: const EdgeInsets.all(16.0),
             children: [
               // Average Rating Display
               Text(
@@ -1525,16 +1521,23 @@ class _CourseScreenState extends State<CourseScreen>
                   style: TextStyle(fontSize: 14, color: Colors.grey),
                 ),
               const SizedBox(height: 10),
-              // Add Feedback Button if enrolled/Admin and hasn't submitted
+              // Add Feedback Form if applicable
               if ((isEnrolled || isAdmin) &&
-                  !_course!.feedbacks.any(
-                          (fb) => fb.userId.toString() == currentUser.id))
+                  !_course!.feedbacks.any((fb) => fb.userId.toString() == currentUser.id))
                 _buildFeedbackForm(currentUser),
               const SizedBox(height: 10),
-              // All Feedbacks List
-              Expanded(
-                child: _buildAllFeedbacks(currentUser),
+              // Feedbacks List Header
+              Text(
+                'Feedbacks',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blueAccent,
+                ),
               ),
+              const SizedBox(height: 10),
+              // All Feedbacks List
+              ..._course!.feedbacks.map((fb) => _buildFeedbackCard(fb, currentUser)).toList(),
             ],
           );
         }
@@ -1690,6 +1693,7 @@ class _CourseScreenState extends State<CourseScreen>
     );
   }
 
+  //// Shows a dialog to edit existing feedback.
   /// Shows a dialog to edit existing feedback.
   void _showEditFeedbackDialog(FeedBack feedback, String userName) {
     final TextEditingController _feedbackController =
@@ -1746,14 +1750,15 @@ class _CourseScreenState extends State<CourseScreen>
                   });
 
                   try {
-                    final courseProvider =
-                    Provider.of<CourseProvider>(context, listen: false);
-                    // Update the feedback
-                    await courseProvider.updateFeedback(
+                    await Provider.of<CourseProvider>(context, listen: false)
+                        .updateFeedback(
                         _course!.id!,
                         feedback.userId.toString(),
                         _feedbackController.text,
                         _currentRating);
+
+                    // **Check if the widget is still mounted before proceeding**
+                    if (!mounted) return;
 
                     setState(() {
                       _isSubmitting = false;
@@ -1763,40 +1768,48 @@ class _CourseScreenState extends State<CourseScreen>
 
                     // Show success message
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content:
-                        const Text('Feedback updated successfully!'),
+                      const SnackBar(
+                        content: Text('Feedback updated successfully!'),
                         backgroundColor: Colors.green,
                       ),
                     );
 
                     // Refresh course data
                     await _initializeCourse();
-                  } catch (e) {
-                    print("Error updating feedback: $e");
+                  } on FirebaseException catch (e) {
+                    // **Check if the widget is still mounted before showing SnackBar**
+                    if (!mounted) return;
+
                     setState(() {
                       _isSubmitting = false;
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                            'Failed to update feedback. Please try again.'),
+                      SnackBar(
+                        content: Text('Failed to update feedback: ${e.message}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  } catch (e) {
+                    // **Check if the widget is still mounted before showing SnackBar**
+                    if (!mounted) return;
+
+                    setState(() {
+                      _isSubmitting = false;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to update feedback: $e'),
                         backgroundColor: Colors.red,
                       ),
                     );
                   }
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content:
-                          Text('Please fill out all fields')));
+                      const SnackBar(content: Text('Please fill out all fields')));
                 }
               },
               child: _isSubmitting
-                  ? const SpinKitDoubleBounce(
-                color: Colors.white,
-                size: 20.0,
-              )
+                  ? const SpinKitDoubleBounce(color: Colors.white, size: 20)
                   : const Text('Save'),
             ),
           ],
@@ -1804,7 +1817,7 @@ class _CourseScreenState extends State<CourseScreen>
       },
     );
   }
-
+  /// Deletes a specific feedback entry.
   /// Deletes a specific feedback entry.
   void _deleteFeedback(String courseId, FeedBack feedback) async {
     // Show a confirmation dialog before deletion
@@ -1837,9 +1850,8 @@ class _CourseScreenState extends State<CourseScreen>
       try {
         final courseProvider =
         Provider.of<CourseProvider>(context, listen: false);
-        // Pass userId as String without casting to int
         await courseProvider.deleteFeedback(
-            courseId, feedback.userId.toString() as int);
+            courseId, feedback.userId.toString());
 
         setState(() {
           _isSubmitting = false; // End loading
@@ -1862,8 +1874,7 @@ class _CourseScreenState extends State<CourseScreen>
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-                'Failed to delete feedback. Please try again.'),
+            content: Text('Failed to delete feedback. Please try again.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1871,6 +1882,7 @@ class _CourseScreenState extends State<CourseScreen>
     }
   }
 
+  /// Builds the feedback submission form.
   /// Builds the feedback submission form.
   Widget _buildFeedbackForm(CustomUser user) {
     return Card(
@@ -1898,25 +1910,18 @@ class _CourseScreenState extends State<CourseScreen>
               decoration: const InputDecoration(
                 labelText: 'Your Feedback',
                 hintText: 'Enter your thoughts...',
-                prefixIcon:
-                Icon(Icons.feedback, color: Colors.blueAccent),
+                prefixIcon: Icon(Icons.feedback, color: Colors.blueAccent),
                 border: OutlineInputBorder(
-                  borderRadius:
-                  BorderRadius.all(Radius.circular(12.0)),
-                  borderSide: BorderSide(
-                      color: Colors.blueAccent, width: 1.0),
+                  borderRadius: BorderRadius.all(Radius.circular(12.0)),
+                  borderSide: BorderSide(color: Colors.blueAccent, width: 1.0),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius:
-                  BorderRadius.all(Radius.circular(12.0)),
-                  borderSide: BorderSide(
-                      color: Colors.blueAccent, width: 1.0),
+                  borderRadius: BorderRadius.all(Radius.circular(12.0)),
+                  borderSide: BorderSide(color: Colors.blueAccent, width: 1.0),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius:
-                  BorderRadius.all(Radius.circular(12.0)),
-                  borderSide: BorderSide(
-                      color: Colors.blueAccent, width: 2.0),
+                  borderRadius: BorderRadius.all(Radius.circular(12.0)),
+                  borderSide: BorderSide(color: Colors.blueAccent, width: 2.0),
                 ),
               ),
               maxLength: 150,
@@ -1935,8 +1940,7 @@ class _CourseScreenState extends State<CourseScreen>
               direction: Axis.horizontal,
               allowHalfRating: true,
               itemCount: 5,
-              itemPadding:
-              const EdgeInsets.symmetric(horizontal: 4.0),
+              itemPadding: const EdgeInsets.symmetric(horizontal: 4.0),
               itemBuilder: (context, _) => const Icon(
                 Icons.star,
                 color: Colors.amber,
@@ -2036,7 +2040,6 @@ class _CourseScreenState extends State<CourseScreen>
       ),
     );
   }
-
 
 
   /// Builds the floating action button for adding feedback.
@@ -2265,4 +2268,5 @@ class _CourseScreenState extends State<CourseScreen>
     Provider.of<AuthService>(context, listen: false);
     return authProvider.user?.role == 'Admin';
   }
+
 }

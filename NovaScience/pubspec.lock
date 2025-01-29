@@ -29,10 +29,10 @@ packages:
     dependency: transitive
     description:
       name: archive
-      sha256: cb6a278ef2dbb298455e1a713bda08524a175630ec643a242c399c932a0a1f7d
+      sha256: "6199c74e3db4fbfbd04f66d739e72fe11c8a8957d5f219f1f4482dbde6420b5a"
       url: "https://pub.dev"
     source: hosted
-    version: "3.6.1"
+    version: "4.0.2"
   args:
     dependency: transitive
     description:
@@ -161,6 +161,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.8"
+  device_info_plus:
+    dependency: transitive
+    description:
+      name: device_info_plus
+      sha256: e3fc9a65820fef83035af8ee8c09004a719d5d1d54e6de978fcb0d84bbeb241a
+      url: "https://pub.dev"
+    source: hosted
+    version: "11.2.2"
+  device_info_plus_platform_interface:
+    dependency: transitive
+    description:
+      name: device_info_plus_platform_interface
+      sha256: "0b04e02b30791224b31969eb1b50d723498f402971bff3630bca2ba839bd1ed2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.0.2"
   dropdown_search:
     dependency: "direct main"
     description:
@@ -574,6 +590,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.2.1"
+  flutter_staggered_animations:
+    dependency: "direct main"
+    description:
+      name: flutter_staggered_animations
+      sha256: "81d3c816c9bb0dca9e8a5d5454610e21ffb068aedb2bde49d2f8d04f75538351"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.1"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -676,10 +700,10 @@ packages:
     dependency: transitive
     description:
       name: image
-      sha256: "2237616a36c0d69aef7549ab439b833fb7f9fb9fc861af2cc9ac3eedddd69ca8"
+      sha256: "8346ad4b5173924b5ddddab782fc7d8a6300178c8b1dc427775405a01701c4a6"
       url: "https://pub.dev"
     source: hosted
-    version: "4.2.0"
+    version: "4.5.2"
   image_picker:
     dependency: "direct main"
     description:
@@ -792,6 +816,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
+  liquid_pull_to_refresh:
+    dependency: "direct main"
+    description:
+      name: liquid_pull_to_refresh
+      sha256: "11e4cd8c5460085a31b479ec4e1cd063eb8e599f35684d57a44dafa1fd1f67f3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.1"
   matcher:
     dependency: transitive
     description:
@@ -920,6 +952,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.8"
+  posix:
+    dependency: transitive
+    description:
+      name: posix
+      sha256: a0117dc2167805aa9125b82eee515cc891819bac2f538c83646d355b16f58b9a
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.0.1"
   provider:
     dependency: "direct main"
     description:
@@ -944,6 +984,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.28.0"
+  shimmer:
+    dependency: "direct main"
+    description:
+      name: shimmer
+      sha256: "5f88c883a22e9f9f299e5ba0e4f7e6054857224976a5d9f839d4ebdc94a14ac9"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.0"
   sky_engine:
     dependency: transitive
     description: flutter
@@ -1149,6 +1197,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.4"
+  vibration:
+    dependency: "direct main"
+    description:
+      name: vibration
+      sha256: "1610296b8b97b3bc65cb745ffb7c9ffa2ad3ef4bb18e95ab13b0881458330126"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.2"
+  vibration_platform_interface:
+    dependency: transitive
+    description:
+      name: vibration_platform_interface
+      sha256: "03e9deaa4df48a1a6212e281bfee5f610d62e9247929dd2f26f4efd4fa5e225c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.0"
   vm_service:
     dependency: transitive
     description:
@@ -1173,6 +1237,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.5.5"
+  win32_registry:
+    dependency: transitive
+    description:
+      name: win32_registry
+      sha256: "21ec76dfc731550fd3e2ce7a33a9ea90b828fdf19a5c3bcf556fa992cfa99852"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.5"
   xdg_directories:
     dependency: transitive
     description:

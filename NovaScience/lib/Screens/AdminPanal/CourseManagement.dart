@@ -2,9 +2,11 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 // Your own imports
@@ -302,6 +304,9 @@ class _CourseManagementScreenState extends State<CourseManagementScreen> with Si
     );
   }
 }
+
+
+
 class EditCourseScreen extends StatefulWidget {
   final Course course;
 
@@ -315,33 +320,35 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
   late TextEditingController titleController;
   late TextEditingController descriptionController;
   late TextEditingController priceController;
+  late TextEditingController subjectController;
+  late TextEditingController instructorController;
+  late TextEditingController durationController;
 
   String? selectedStatus;
-  String? selectedSubject;
-  DateTime? startDate;
-  DateTime? endDate;
   File? selectedImage;
   bool isLoading = false;
 
-  final List<String> statuses = ['free', 'premium'];
-  final List<String> subjects = ['Math', 'Science', 'History', 'Programming'];
+  final List<String> statuses = ['free', 'Premium'];
 
   @override
   void initState() {
     super.initState();
     titleController = TextEditingController(text: widget.course.courseTitle);
-    descriptionController = TextEditingController(text: widget.course.description);
-    priceController = TextEditingController(
-      text: widget.course.price?.toString(),
-    );
+    descriptionController =
+        TextEditingController(text: widget.course.description);
+    priceController =
+        TextEditingController(text: widget.course.price?.toString());
+    subjectController =
+        TextEditingController(text: widget.course.subject ?? '');
+    instructorController =
+        TextEditingController(text: widget.course.instructor ?? '');
+    durationController =
+        TextEditingController(text: widget.course.duration?? '');
 
-    // Validate selectedStatus and selectedSubject
+
     selectedStatus = statuses.contains(widget.course.status)
         ? widget.course.status
         : statuses.first;
-    selectedSubject = subjects.contains(widget.course.subject)
-        ? widget.course.subject
-        : subjects.first;
   }
 
   Future<void> _pickImage() async {
@@ -359,134 +366,201 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
     final courseProvider = Provider.of<CourseProvider>(context, listen: false);
 
     return Scaffold(
-      appBar: AppBar(title: Text('Edit Course')),
-      body: isLoading
-          ? Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Course Title
-            TextField(
-              controller: titleController,
-              decoration: InputDecoration(labelText: 'Course Title'),
-            ),
-            const SizedBox(height: 10),
+      appBar: AppBar(
+        title: Text('Edit Course'),
+        backgroundColor: Colors.teal,
+      ),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title Field
+                _buildInputField(
+                  controller: titleController,
+                  label: 'Course Title',
+                  hintText: 'Enter course title',
+                ),
+                const SizedBox(height: 16),
 
-            // Course Description
-            TextField(
-              controller: descriptionController,
-              decoration: InputDecoration(labelText: 'Course Description'),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 10),
+                // Instructor Field
+                _buildInputField(
+                  controller: instructorController,
+                  label: 'Instructor',
+                  hintText: 'Enter instructor name',
+                ),
+                const SizedBox(height: 16),
 
-            // Course Price
-            TextField(
-              controller: priceController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: 'Price'),
-            ),
-            const SizedBox(height: 10),
+                // Description Field
+                _buildInputField(
+                  controller: descriptionController,
+                  label: 'Course Description',
+                  hintText: 'Enter course description',
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
 
-            // Status Dropdown
-            DropdownButtonFormField<String>(
-              value: selectedStatus,
-              onChanged: (value) {
-                setState(() {
-                  selectedStatus = value;
-                });
-              },
-              items: statuses
-                  .map((status) => DropdownMenuItem(
-                value: status,
-                child: Text(status),
-              ))
-                  .toList(),
-              decoration: InputDecoration(labelText: 'Status'),
-            ),
-            const SizedBox(height: 10),
+                // Description Field
+                _buildInputField(
+                  controller: durationController,
+                  label: 'Course Duration',
+                  hintText: 'Enter course duration',
+                ),
+                const SizedBox(height: 16),
 
-            // Subject Dropdown
-            DropdownButtonFormField<String>(
-              value: selectedSubject,
-              onChanged: (value) {
-                setState(() {
-                  selectedSubject = value;
-                });
-              },
-              items: subjects.map((subject) {
-                return DropdownMenuItem(
-                  value: subject,
-                  child: Text(subject),
-                );
-              }).toList(),
-              decoration: InputDecoration(labelText: 'Subject'),
-            ),
-            const SizedBox(height: 10),
+                // Price Field
+                _buildInputField(
+                  controller: priceController,
+                  label: 'Price',
+                  hintText: 'Enter price (e.g., 20.99)',
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+
+                // Status Dropdown
+                DropdownButtonFormField<String>(
+                  value: selectedStatus,
+                  items: statuses
+                      .map(
+                        (status) => DropdownMenuItem(
+                      value: status,
+                      child: Text(
+                        status[0].toUpperCase() + status.substring(1),
+                      ),
+                    ),
+                  )
+                      .toList(),
+                  onChanged: (value) => setState(() {
+                    selectedStatus = value;
+                  }),
+                  decoration: InputDecoration(
+                    labelText: 'Status',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Subject Field
+                _buildInputField(
+                  controller: subjectController,
+                  label: 'Subject',
+                  hintText: 'Enter subject name',
+                ),
+                const SizedBox(height: 16),
+
+                // Image Picker
+                ElevatedButton.icon(
+                  icon: Icon(Icons.image),
+                  label: Text(selectedImage == null
+                      ? 'Pick Image'
+                      : 'Change Image'),
+                  onPressed: _pickImage,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: Size(double.infinity, 50),
+                    backgroundColor: Colors.teal,
+                  ),
+                ),
+                if (selectedImage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16.0),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8.0),
+                      child: Image.file(
+                        selectedImage!,
+                        height: 150,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 24),
+
+                // Save Button
+                ElevatedButton(
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                    if (titleController.text.isEmpty ||
+                        descriptionController.text.isEmpty ||
+                        subjectController.text.isEmpty ||
+                        selectedStatus == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Please fill in all fields'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    setState(() => isLoading = true);
+
+                    // Handle image upload
+                    String? imageUrl = widget.course.imageUrl;
+                    if (selectedImage != null) {
+                      imageUrl =
+                      await courseProvider.uploadImage(selectedImage!);
+                    }
+
+                    // Update course fields
+                    widget.course.courseTitle = titleController.text;
+                    widget.course.description =
+                        descriptionController.text;
+                    widget.course.price =
+                        double.tryParse(priceController.text);
+                    widget.course.status = selectedStatus;
+                    widget.course.subject = subjectController.text;
+                    widget.course.imageUrl = imageUrl;
+                    widget.course.instructor = instructorController.text;
+                    widget.course.duration = durationController.text;
 
 
-            // Image Picker
-            ElevatedButton.icon(
-              icon: Icon(Icons.image),
-              label: Text(selectedImage == null ? 'Pick Image' : 'Change Image'),
-              onPressed: _pickImage,
+                    await courseProvider.updateCourse(widget.course);
+
+                    setState(() => isLoading = false);
+
+                    Navigator.pop(context);
+                  },
+                  child: Text('Save Changes'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: Size(double.infinity, 50),
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: Colors.teal,
+                  ),
+                ),
+              ],
             ),
-            if (selectedImage != null)
-              Image.file(
-                selectedImage!,
-                height: 150,
-                width: 150,
-                fit: BoxFit.cover,
+          ),
+
+          // Full-Screen Loading Indicator
+          if (isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: Center(
+                child: CircularProgressIndicator(),
               ),
-            const SizedBox(height: 20),
-
-            // Save Button
-            ElevatedButton(
-              onPressed: () async {
-                if (titleController.text.isEmpty ||
-                    descriptionController.text.isEmpty ||
-                    selectedStatus == null ||
-                    selectedSubject == null ||
-                    startDate == null ||
-                    endDate == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Please fill in all fields')),
-                  );
-                  return;
-                }
-
-                setState(() {
-                  isLoading = true;
-                });
-
-                // Handle image upload
-                String? imageUrl = widget.course.imageUrl;
-                if (selectedImage != null) {
-                  imageUrl = await courseProvider.uploadImage(selectedImage!);
-                }
-
-                // Update the course fields
-                widget.course.courseTitle = titleController.text;
-                widget.course.description = descriptionController.text;
-                widget.course.price = double.tryParse(priceController.text);
-                widget.course.status = selectedStatus;
-                widget.course.subject = selectedSubject;
-                widget.course.imageUrl = imageUrl;
-
-                // Call provider to update
-                await courseProvider.updateCourse(widget.course);
-
-                setState(() {
-                  isLoading = false;
-                });
-
-                Navigator.pop(context);
-              },
-              child: Text('Save Changes'),
             ),
-          ],
-        ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputField({
+    required TextEditingController controller,
+    required String label,
+    String? hintText,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hintText,
+        border: OutlineInputBorder(),
       ),
     );
   }
@@ -499,6 +573,8 @@ extension StringExtension on String {
   }
 }
 
+
+
 class AddCourseScreen extends StatefulWidget {
   @override
   _AddCourseScreenState createState() => _AddCourseScreenState();
@@ -508,15 +584,13 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
   final TextEditingController titleController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController priceController = TextEditingController();
+  final TextEditingController subjectController = TextEditingController();
+  final TextEditingController instructorController= TextEditingController();
+  final TextEditingController durationController= TextEditingController();
 
   String? selectedStatus = 'free';
-  String? selectedSubject;
-  DateTime? startDate;
-  DateTime? endDate;
   File? selectedImage;
   bool isLoading = false;
-
-  final List<String> subjects = ['Math', 'Science', 'History', 'Programming'];
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -528,185 +602,193 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     }
   }
 
+
+
   @override
   Widget build(BuildContext context) {
     final courseProvider = Provider.of<CourseProvider>(context, listen: false);
 
     return Scaffold(
       appBar: AppBar(title: Text('Add New Course')),
-      body: isLoading
-          ? Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Course Title
-            TextField(
-              controller: titleController,
-              decoration: InputDecoration(labelText: 'Course Title'),
-            ),
-            const SizedBox(height: 10),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title Field
+                TextField(
+                  controller: titleController,
+                  decoration: InputDecoration(
+                    labelText: 'Course Title',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
 
-            // Course Description
-            TextField(
-              controller: descriptionController,
-              decoration: InputDecoration(labelText: 'Course Description'),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 10),
+                // Description Field
+                TextField(
+                  controller: descriptionController,
+                  decoration: InputDecoration(
+                    labelText: 'Course Description',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: durationController,
+                  decoration: InputDecoration(
+                    labelText: 'Course Duration',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
 
-            // Course Price
-            TextField(
-              controller: priceController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: 'Price'),
-            ),
-            const SizedBox(height: 10),
+                // Price Field
+                TextField(
+                  controller: priceController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Price',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
 
-            // Status Dropdown
-            DropdownButtonFormField<String>(
-              value: selectedStatus,
-              onChanged: (value) {
-                setState(() {
-                  selectedStatus = value;
-                });
-              },
-              items: ['free', 'premium']
-                  .map((status) => DropdownMenuItem(
-                value: status,
-                child: Text(status),
-              ))
-                  .toList(),
-              decoration: InputDecoration(labelText: 'Status'),
-            ),
-            const SizedBox(height: 10),
-
-            // Subject Dropdown
-            DropdownButtonFormField<String>(
-              value: selectedSubject,
-              onChanged: (value) {
-                setState(() {
-                  selectedSubject = value;
-                });
-              },
-              items: subjects
-                  .map((subject) => DropdownMenuItem(
-                value: subject,
-                child: Text(subject),
-              ))
-                  .toList(),
-              decoration: InputDecoration(labelText: 'Subject'),
-            ),
-            const SizedBox(height: 10),
-
-            // Start Date Picker
-            ListTile(
-              title: Text(
-                startDate == null
-                    ? 'Pick Start Date'
-                    : 'Start Date: ${startDate!.toLocal()}'.split(' ')[0],
-              ),
-              trailing: Icon(Icons.calendar_today),
-              onTap: () async {
-                DateTime? picked = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.now(),
-                  firstDate: DateTime(2000),
-                  lastDate: DateTime(2100),
-                );
-                if (picked != null) {
-                  setState(() {
-                    startDate = picked;
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-
-            // End Date Picker
-            ListTile(
-              title: Text(
-                endDate == null
-                    ? 'Pick End Date'
-                    : 'End Date: ${endDate!.toLocal()}'.split(' ')[0],
-              ),
-              trailing: Icon(Icons.calendar_today),
-              onTap: () async {
-                DateTime? picked = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.now(),
-                  firstDate: DateTime(2000),
-                  lastDate: DateTime(2100),
-                );
-                if (picked != null) {
-                  setState(() {
-                    endDate = picked;
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-
-            // Image Picker
-            ElevatedButton.icon(
-              icon: Icon(Icons.image),
-              label:
-              Text(selectedImage == null ? 'Pick Image' : 'Change Image'),
-              onPressed: _pickImage,
-            ),
-            if (selectedImage != null)
-              Image.file(
-                selectedImage!,
-                height: 150,
-                width: 150,
-                fit: BoxFit.cover,
-              ),
-            const SizedBox(height: 20),
-
-            // Add Course Button
-            ElevatedButton(
-              onPressed: () async {
-                if (titleController.text.isEmpty ||
-                    descriptionController.text.isEmpty ||
-                    selectedStatus == null ||
-                    selectedSubject == null ||
-                    startDate == null ||
-                    endDate == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Please fill in all fields'),
+                // Status Dropdown
+                DropdownButtonFormField<String>(
+                  value: selectedStatus,
+                  items: ['free', 'Premium']
+                      .map(
+                        (status) => DropdownMenuItem(
+                      value: status,
+                      child: Text(
+                        status[0].toUpperCase() + status.substring(1),
+                      ),
                     ),
-                  );
-                  return;
-                }
+                  )
+                      .toList(),
+                  onChanged: (value) => setState(() {
+                    selectedStatus = value;
+                  }),
+                  decoration: InputDecoration(
+                    labelText: 'Status',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
 
-                setState(() => isLoading = true);
+                // Subject Field
+                TextField(
+                  controller: subjectController,
+                  decoration: InputDecoration(
+                    labelText: 'Subject',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: instructorController,
+                  decoration: InputDecoration(
+                    labelText: 'Instructor',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
 
-                String? imageUrl;
-                if (selectedImage != null) {
-                  imageUrl = await courseProvider.uploadImage(
-                    selectedImage!,
-                  );
-                }
+                // Image Picker
+                ElevatedButton.icon(
+                  icon: Icon(Icons.image),
+                  label: Text(
+                    selectedImage == null ? 'Pick Image' : 'Change Image',
+                  ),
+                  onPressed: _pickImage,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: Size(double.infinity, 50),
+                  ),
+                ),
+                if (selectedImage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16.0),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8.0),
+                      child: Image.file(
+                        selectedImage!,
+                        height: 150,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 24),
 
-                await courseProvider.addCourse(
-                  title: titleController.text,
-                  description: descriptionController.text,
-                  price: double.tryParse(priceController.text),
-                  startDate: startDate,
-                  endDate: endDate,
-                  imageUrl: imageUrl,
-                  status: selectedStatus,
-                  subject: selectedSubject,
-                );
+                // Add Course Button
+                ElevatedButton(
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                    if (titleController.text.isEmpty ||
+                        descriptionController.text.isEmpty ||
+                        subjectController.text.isEmpty ||
+                        selectedStatus == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Please fill in all fields'),
+                        ),
+                      );
+                      return;
+                    }
 
-                setState(() => isLoading = false);
-                Navigator.pop(context);
-              },
-              child: Text('Add Course'),
+                    setState(() => isLoading = true);
+
+                    String? imageUrl;
+                    if (selectedImage != null) {
+                      imageUrl =
+                      await courseProvider.uploadImage(selectedImage!);
+                    }
+
+                    await courseProvider.addCourse(
+                      title: titleController.text,
+                      description: descriptionController.text,
+                      price: double.tryParse(priceController.text),
+                      imageUrl: imageUrl,
+                      status: selectedStatus,
+                      subject: subjectController.text,
+                      instructor: instructorController.text,
+                      duration: durationController.text
+                    );
+
+                    await courseProvider.sendNotificationToAllUsers(
+                      title: "New Course Added!",
+                      body: "A new course titled '${titleController.text}' is now available. Enroll now!",
+                    );
+
+
+                    setState(() => isLoading = false);
+                    Navigator.pop(context);
+                  },
+                  child: Text('Add Course'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: Size(double.infinity, 50),
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          // Full-Screen Loading Indicator
+          if (isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
       ),
     );
   }

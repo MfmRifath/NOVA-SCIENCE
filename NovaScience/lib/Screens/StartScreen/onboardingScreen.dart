@@ -1,3 +1,4 @@
+import 'package:animate_do/animate_do.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:nova_science/Screens/StartScreen/JoinScreen.dart';
@@ -10,14 +11,10 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen>
-    with SingleTickerProviderStateMixin {
-  PageController _pageController = PageController();
+class _OnboardingScreenState extends State<OnboardingScreen> {
+  final PageController _pageController = PageController();
   int currentPage = 0;
-
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
+  double _pageOffset = 0;
 
   List<Widget> _pages = [
     Startscreen(
@@ -49,149 +46,187 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   void initState() {
     super.initState();
-
-    _animationController = AnimationController(
-      duration: Duration(milliseconds: 500),
-      vsync: this,
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.2, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
-    );
-
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
-    );
-
     _pageController.addListener(() {
-      _animationController.reset();
-      _animationController.forward();
+      setState(() {
+        _pageOffset = _pageController.page!;
+      });
     });
-
-    _animationController.forward();
   }
 
   @override
   void dispose() {
     _pageController.dispose();
-    _animationController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Scaffold(
       body: Stack(
         children: [
+          // Parallax PageView
           PageView.builder(
             controller: _pageController,
             itemCount: _pages.length,
-            onPageChanged: (index) {
-              setState(() {
-                currentPage = index;
-              });
-            },
+            onPageChanged: (index) => setState(() => currentPage = index),
             itemBuilder: (context, index) {
-              return AnimatedBuilder(
-                animation: _animationController,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: _scaleAnimation.value,
-                    child: Opacity(
-                      opacity: _fadeAnimation.value,
-                      child: _pages[index],
-                    ),
-                  );
-                },
+              final delta = (index - _pageOffset).abs();
+              final parallaxOffset = delta * 100;
+
+              return FadeInRight(
+                duration: Duration(milliseconds: 600),
+                child: Transform.translate(
+                  offset: Offset(parallaxOffset, 0),
+                  child: _pages[index],
+                ),
               );
             },
           ),
+
+          // Gradient Overlay
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.black.withOpacity(0.3), Colors.transparent],
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  stops: [0.1, 0.9],
+                ),
+              ),
+            ),
+          ),
+
+          // Bottom Controls
           Positioned(
-            bottom: 30,
+            bottom: 40,
             left: 20,
             right: 20,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Back button animation and visibility control
-                AnimatedOpacity(
-                  opacity: currentPage == 0 ? 0.0 : 1.0,
-                  duration: Duration(milliseconds: 500),
-                  child: currentPage == 0
-                      ? SizedBox.shrink()
-                      : IconButton(
-                    onPressed: () {
-                      _pageController.previousPage(
-                        duration: Duration(milliseconds: 300),
-                        curve: Curves.ease,
-                      );
-                    },
-                    icon: Icon(CupertinoIcons.back, color: Colors.blue),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  // Animated Dots
+                  SlideInUp(
+                    duration: Duration(milliseconds: 800),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        _pages.length,
+                            (index) => AnimatedContainer(
+                          duration: Duration(milliseconds: 300),
+                          margin: EdgeInsets.symmetric(horizontal: 6),
+                          width: currentPage == index ? 24.0 : 8.0,
+                          height: 8.0,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            color: currentPage == index
+                                ? Colors.blue
+                                : Colors.white.withOpacity(0.5),
+                            boxShadow: [
+                              if (currentPage == index)
+                                BoxShadow(
+                                  color: Colors.blue.withOpacity(0.5),
+                                  blurRadius: 10,
+                                  spreadRadius: 2,
+                                )
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                // Dots indicator with animated transitions
-                Row(
-                  children: List.generate(
-                    _pages.length,
-                        (index) => AnimatedContainer(
-                      duration: Duration(milliseconds: 300),
-                      margin: EdgeInsets.symmetric(horizontal: 4.0),
-                      width: currentPage == index ? 12.0 : 8.0,
-                      height: currentPage == index ? 12.0 : 8.0,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: currentPage == index
-                            ? Colors.blue
-                            : Colors.grey,
-                        boxShadow: [
-                          if (currentPage == index)
-                            BoxShadow(
-                              color: Colors.blueAccent.withOpacity(0.5),
-                              blurRadius: 10.0,
-                              spreadRadius: 2.0,
+
+                  SizedBox(height: screenHeight * 0.04),
+
+                  // Navigation Row
+                  FadeInUp(
+                    duration: Duration(milliseconds: 800),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Back Button
+                        if (currentPage != 0)
+                          ElasticIn(
+                            duration: Duration(milliseconds: 600),
+                            child: IconButton(
+                              onPressed: () => _pageController.previousPage(
+                                duration: Duration(milliseconds: 500),
+                                curve: Curves.easeInOut,
+                              ),
+                              icon: Icon(
+                                CupertinoIcons.back,
+                                color: Colors.white,
+                                size: 32,
+                              ),
+                              splashColor: Colors.blue.withOpacity(0.2),
                             ),
-                        ],
-                      ),
+                          )
+                        else
+                          SizedBox(width: 48),
+
+                        // Next/Get Started Button
+                        ElasticIn(
+                          delay: Duration(milliseconds: 200),
+                          duration: Duration(milliseconds: 600),
+                          child: ElevatedButton(
+                            onPressed: () {
+                              if (currentPage == _pages.length - 1) {
+                                Navigator.pushReplacement(
+                                  context,
+                                  PageRouteBuilder(
+                                    transitionDuration: Duration(milliseconds: 800),
+                                    pageBuilder: (_, __, ___) => JoinScreen(),
+                                    transitionsBuilder: (_, animation, __, child) {
+                                      return FadeTransition(
+                                        opacity: animation,
+                                        child: SlideTransition(
+                                          position: Tween<Offset>(
+                                            begin: Offset(0.0, 0.5),
+                                            end: Offset.zero,
+                                          ).animate(animation),
+                                          child: child,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                );
+                              } else {
+                                _pageController.nextPage(
+                                  duration: Duration(milliseconds: 500),
+                                  curve: Curves.easeInOut,
+                                );
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xff58B9A8),
+                              elevation: 4,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 35,
+                                vertical: 18,
+                              ),
+                              shadowColor: Colors.blue.withOpacity(0.3),
+                            ),
+                            child: Text(
+                              currentPage == _pages.length - 1 ? "Get Started" : "Next",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                // Next or Finish button
-                currentPage == _pages.length - 1
-                    ? ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => JoinScreen(),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xff58B9A8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10.0),
-                    ),
-                    padding: EdgeInsets.symmetric(
-                        vertical: 10.0, horizontal: 20.0),
-                  ),
-                  child: Text(
-                    "Finish",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                )
-                    : IconButton(
-                  onPressed: () {
-                    _pageController.nextPage(
-                      duration: Duration(milliseconds: 300),
-                      curve: Curves.ease,
-                    );
-                  },
-                  icon: Icon(CupertinoIcons.forward, color: Colors.blue),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
