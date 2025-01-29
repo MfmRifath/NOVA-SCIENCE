@@ -32,10 +32,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Admin Panel'),
-        backgroundColor: Colors.blueAccent,
-      ),
+
       body: FadeTransition(
         opacity: _fadeAnimation,
         child: Padding(
@@ -129,6 +126,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
                   trailing: Icon(Icons.arrow_forward_ios),
                   onTap: () {
                     Navigator.pushNamed(context, '/systemSettings');
+                  },
+                ),
+              ),
+              SizedBox(height: 10),
+
+              // Settings Section
+              Card(
+                color: Colors.purple[50],
+                child: ListTile(
+                  leading: Icon(Icons.settings, color: Colors.purple),
+                  title: Text('Manage Advertisement', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  subtitle: Text('Add, edite, Delete Advertisments.'),
+                  trailing: Icon(Icons.arrow_forward_ios),
+                  onTap: () {
+                    Navigator.pushNamed(context, '/manageAdvertisements');
                   },
                 ),
               ),

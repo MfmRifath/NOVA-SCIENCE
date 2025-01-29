@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:nova_science/Screens/AdminPanal/EnrollUsersScreen.dart';
+import 'package:nova_science/Screens/AdminPanal/ManageAdvertisementsScreen.dart';
 import 'package:nova_science/Screens/StartScreen/HomeScreen.dart';
 import 'package:nova_science/Screens/StartScreen/NotificationScreen.dart';
 import 'package:nova_science/Screens/StartScreen/ProfileScreen.dart';
@@ -21,6 +22,7 @@ import 'Screens/StartScreen/JoinScreen.dart';
 import 'Screens/StartScreen/SignIn.dart';
 import 'Screens/StartScreen/onboardingScreen.dart';
 import 'Screens/StartScreen/SplashScreen.dart';
+import 'Service/AdvertisementProvider.dart';
 import 'Service/CourseProvider.dart';
 import 'Service/AuthService.dart'; // Make sure to import your AuthService
 
@@ -47,6 +49,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (context) => CourseProvider()),
         ChangeNotifierProvider(create: (context) => service.AuthService()), // Correct instantiation
+        ChangeNotifierProvider(create: (_) => AdvertisementProvider()),
       ],
       child: const NovaScience(),
     ),
@@ -68,6 +71,7 @@ class Routes {
   static const String courseScreen = '/courseScreen';
   static const String enrollUsersScreen = '/enrollUsers';
   static const String notifications = '/notifications';
+  static const String manageAdvertisements = '/manageAdvertisements';
 }
 
 class NovaScience extends StatelessWidget {
@@ -92,9 +96,6 @@ class NovaScience extends StatelessWidget {
             break;
           case Routes.signIn:
             builder = (context) => SignInScreen();
-            break;
-          case Routes.homeScreen:
-            builder = (context) => HomePage();
             break;
           case Routes.homeScreen:
             builder = (context) => HomePage();
@@ -133,6 +134,9 @@ class NovaScience extends StatelessWidget {
             break;
           case Routes.notifications:
             builder = (context) => NotificationScreen();
+            break;
+          case Routes.manageAdvertisements :
+            builder = (context) => ManageAdvertisementsScreen();
             break;
            // Optional: break here for clarity
         }

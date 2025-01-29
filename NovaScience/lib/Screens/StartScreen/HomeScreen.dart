@@ -1,3 +1,4 @@
+// HomeScreen.dart
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,9 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:nova_science/Screens/AddCourseScreen.dart';
 import 'package:provider/provider.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
+import '../../Service/AdvertisementProvider.dart';
 import '../../Service/AuthService.dart';
 import '../../Service/CourseProvider.dart';
+import '../AdvertisementCarousel.dart';
+
 import 'CourseCard.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,15 +26,16 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
   String _searchQuery = '';
-  bool isAdmin = false; // Admin flag
+  bool isAdmin = false;
 
   @override
   void initState() {
     super.initState();
-    _checkAdminStatus(); // Check if the user is an admin
+    _checkAdminStatus();
     _searchController.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<CourseProvider>(context, listen: false).fetchCourses();
+      Provider.of<AdvertisementProvider>(context, listen: false).fetchAdvertisements();
     });
   }
 
@@ -50,10 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (user != null) {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       setState(() {
-        isAdmin = userDoc.data()?['role'] == 'Admin'; // Check the role field
-
-        // Update pages and titles dynamically based on admin role
-
+        isAdmin = userDoc.data()?['role'] == 'Admin';
       });
     }
   }
@@ -68,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _onRefresh() async {
     await Provider.of<CourseProvider>(context, listen: false).fetchCourses();
+    await Provider.of<AdvertisementProvider>(context, listen: false).fetchAdvertisements();
     _refreshController.refreshCompleted();
   }
 
@@ -88,25 +92,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final courseProvider = Provider.of<CourseProvider>(context);
+    final advertisementProvider = Provider.of<AdvertisementProvider>(context);
     final isLoading = courseProvider.isLoading;
     final hasError = courseProvider.hasError;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          "Welcome RN",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.notifications, color: Colors.white),
-            onPressed: () {},
-          ),
-        ],
-      ),
       floatingActionButton: isAdmin
           ? FloatingActionButton(
         onPressed: () {
@@ -118,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.blueAccent,
         tooltip: 'Add Course',
       )
-          : null, // Show only if the user is an admin
+          : null,
       body: Stack(
         children: [
           _buildBackground(),
@@ -138,6 +128,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     delegate: SliverChildListDelegate(
                       [
                         _buildSearchBar(),
+                        SizedBox(height: 30),
+                        _buildAdvertisementSection(advertisementProvider),
                         SizedBox(height: 30),
                         _buildSectionTitle("Free Watching"),
                         SizedBox(height: 15),
@@ -247,10 +239,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-
-
   Widget _buildCoursesGridView(List<QueryDocumentSnapshot<Object?>> courses, BuildContext context) {
-    final authService = Provider.of<AuthService>(context, listen: false); // Get AuthService
+    final authService = Provider.of<AuthService>(context, listen: false);
 
     return GridView.builder(
       shrinkWrap: true,
@@ -278,12 +268,12 @@ class _HomeScreenState extends State<HomeScreen> {
         final subject = data['subject'] ?? 'Subject not specified';
 
         return FutureBuilder<int>(
-          future: authService.getEnrollmentCount(course.id), // Fetch enrollment count
+          future: authService.getEnrollmentCount(course.id),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return Center(child: CircularProgressIndicator()); // Loading indicator
+              return Center(child: CircularProgressIndicator());
             }
-            final enrolledCount = snapshot.data ?? 0; // Default to 0 if null
+            final enrolledCount = snapshot.data ?? 0;
 
             return CourseCard(
               courseTitle: courseTitle,
@@ -343,5 +333,22 @@ class _HomeScreenState extends State<HomeScreen> {
         return _buildCoursesGridView(snapshot.data!, context);
       },
     );
+  }
+
+  Widget _buildAdvertisementSection(AdvertisementProvider advertisementProvider) {
+    if (advertisementProvider.isLoading) {
+      return Center(child: CircularProgressIndicator());
+    } else if (advertisementProvider.error != null) {
+      return Center(
+        child: Text(
+          "Failed to load advertisements.",
+          style: TextStyle(color: Colors.red),
+        ),
+      );
+    } else if (advertisementProvider.advertisements.isEmpty) {
+      return SizedBox();
+    } else {
+      return AdvertisementCarousel(advertisements: advertisementProvider.advertisements);
+    }
   }
 }

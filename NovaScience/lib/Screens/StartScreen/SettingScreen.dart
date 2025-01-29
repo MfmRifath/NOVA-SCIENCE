@@ -49,16 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Settings',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            fontSize: 22,
-          ),
-        ),
-        centerTitle: true,
-      ),
+
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: FadeTransition(
