@@ -3,6 +3,7 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/cupertino.dart';
 import '../Modals/User.dart';
@@ -227,27 +228,7 @@ class AuthService with ChangeNotifier {
   }
 
   /// Deletes the currently authenticated user's account.
-  Future<void> deleteUser() async {
-    User? user = _auth.currentUser;
-    if (user != null) {
-      try {
-        var userDoc = await _firestore.collection('users').doc(user.uid).get();
-        var profileImageUrl = userDoc.data()?['profileImageUrl'];
-        if (profileImageUrl != null && profileImageUrl.isNotEmpty) {
-          await _storage.refFromURL(profileImageUrl).delete();
-        }
 
-        await _firestore.collection('users').doc(user.uid).delete();
-        await user.delete();
-
-        _user = null; // Clear local user data
-        notifyListeners(); // Notify after deleting user
-      } catch (e) {
-        print('Error deleting user: $e');
-        // Optionally, handle errors by rethrowing or using another mechanism
-      }
-    }
-  }
 
   /// Signs out the current user.
   Future<void> signOut() async {
@@ -373,7 +354,27 @@ class AuthService with ChangeNotifier {
       // Optionally, handle errors by rethrowing or using another mechanism
     }
   }
+  Future<void> deleteUser() async {
+    User? user = _auth.currentUser;
+    if (user != null) {
+      try {
+        // Delete user's profile image from Firebase Storage (if exists)
+        var userDoc = await _firestore.collection('users').doc(user.uid).get();
+        var profileImageUrl = userDoc.data()?['profileImageUrl'];
+        if (profileImageUrl != null && profileImageUrl.isNotEmpty) {
+          await _storage.refFromURL(profileImageUrl).delete();
+        }
 
+        // Delete user data from Firestore
+        await _firestore.collection('users').doc(user.uid).delete();
+
+        notifyListeners(); // Notify listeners that user is deleted
+      } catch (e) {
+        print('Error deleting user from Firestore: $e');
+        throw e; // Rethrow error to handle it in ProfileScreen
+      }
+    }
+  }
   /// Updates a user's data by their email.
   Future<void> updateUserByEmail({
     required String email,
@@ -451,7 +452,22 @@ class AuthService with ChangeNotifier {
       // Optionally, handle errors by rethrowing or using another mechanism
     }
   }
-
+  Future<void> storeFCMToken() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        String? token = await FirebaseMessaging.instance.getToken();
+        if (token != null) {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+            {'fcmToken': token},
+            SetOptions(merge: true), // Merge with existing data
+          );
+        }
+      } catch (e) {
+        print("Error storing FCM token: $e");
+      }
+    }
+  }
   /// Fetches all users from Firestore and converts them to CustomUser objects.
   Future<List<CustomUser>> fetchAllUsers() async {
     List<CustomUser> users = [];
@@ -481,5 +497,28 @@ class AuthService with ChangeNotifier {
       // Optionally, handle errors by rethrowing or using another mechanism
     }
     return users;
+  }
+  Future<int> getEnrollmentCount(String courseId) async {
+    try {
+      QuerySnapshot query = await _firestore
+          .collection('users')
+          .where('enrolledCourses', arrayContains: courseId)
+          .get();
+      return query.docs.length; // Return the number of enrolled users
+    } catch (e) {
+      print('Error fetching enrollment count: $e');
+      return 0; // Default to 0 in case of an error
+    }
+  }
+  void listenForTokenChanges() {
+    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+          {'fcmToken': newToken},
+          SetOptions(merge: true),
+        );
+      }
+    });
   }
 }

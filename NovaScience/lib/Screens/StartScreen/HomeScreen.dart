@@ -7,6 +7,7 @@ import 'package:nova_science/Screens/AddCourseScreen.dart';
 import 'package:provider/provider.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
 
+import '../../Service/AuthService.dart';
 import '../../Service/CourseProvider.dart';
 import 'CourseCard.dart';
 
@@ -246,7 +247,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+
+
   Widget _buildCoursesGridView(List<QueryDocumentSnapshot<Object?>> courses, BuildContext context) {
+    final authService = Provider.of<AuthService>(context, listen: false); // Get AuthService
+
     return GridView.builder(
       shrinkWrap: true,
       physics: NeverScrollableScrollPhysics(),
@@ -270,24 +275,34 @@ class _HomeScreenState extends State<HomeScreen> {
         final time = data['duration'] ?? 'Duration not specified';
         final imageUrl = data['imageUrl'] ?? 'assets/images/default_image.jpg';
         final rating = data['averageRating'] != null ? double.parse(data['averageRating'].toString()) : 0.0;
-        final enrolledCount = data['enrolledUserIds'] != null ? (data['enrolledUserIds'] as List).length : 0;
         final subject = data['subject'] ?? 'Subject not specified';
 
-        return CourseCard(
-          courseTitle: courseTitle,
-          time: time,
-          instructor: instructor,
-          imageUrl: imageUrl,
-          id: course.id,
-          rating: rating,
-          enrolledCount: enrolledCount,
-          onTap: () {
-            Navigator.pushNamed(
-              context,
-              '/courseScreen',
-              arguments: course.id,
+        return FutureBuilder<int>(
+          future: authService.getEnrollmentCount(course.id), // Fetch enrollment count
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Center(child: CircularProgressIndicator()); // Loading indicator
+            }
+            final enrolledCount = snapshot.data ?? 0; // Default to 0 if null
+
+            return CourseCard(
+              courseTitle: courseTitle,
+              time: time,
+              instructor: instructor,
+              imageUrl: imageUrl,
+              id: course.id,
+              rating: rating,
+              enrolledCount: enrolledCount,
+              subject: subject,
+              onTap: () {
+                Navigator.pushNamed(
+                  context,
+                  '/courseScreen',
+                  arguments: course.id,
+                );
+              },
             );
-          }, subject: subject,
+          },
         );
       },
     );

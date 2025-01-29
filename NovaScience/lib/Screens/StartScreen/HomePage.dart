@@ -86,6 +86,25 @@ class _HomePageState extends State<HomePage> {
         ),
         elevation: 0,
         backgroundColor: Colors.blueAccent,
+        actions: [
+          // Notifications Button with Badge
+          IconButton(
+            icon: Stack(
+              children: [
+                Icon(Icons.notifications, size: 28),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: _buildNotificationBadge(), // Display unread count badge
+                ),
+              ],
+            ),
+            onPressed: () {
+              Navigator.pushNamed(context, '/notifications');
+            },
+          ),
+          SizedBox(width: 10),
+        ],
       ),
 
       // PageView for smooth transitions
@@ -150,5 +169,28 @@ class _HomePageState extends State<HomePage> {
     }
 
     return items;
+  }
+  Widget _buildNotificationBadge() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('notifications')
+          .where('isRead', isEqualTo: false) // Only count unread notifications
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return Container();
+
+        return Container(
+          padding: EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: Colors.red,
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            snapshot.data!.docs.length.toString(), // Show unread count
+            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        );
+      },
+    );
   }
 }

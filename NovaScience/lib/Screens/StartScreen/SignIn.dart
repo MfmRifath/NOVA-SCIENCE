@@ -1,3 +1,4 @@
+import 'package:animate_do/animate_do.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,95 +6,49 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
+import '../../Service/AuthService.dart';
+
 class SignInScreen extends StatefulWidget {
   @override
   _SignInScreenState createState() => _SignInScreenState();
 }
 
-class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _fadeInAnimation;
-  late Animation<Offset> _slideInAnimation;
+class _SignInScreenState extends State<SignInScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
+  bool _obscureText = true;
 
-  @override
-  void initState() {
-    super.initState();
-
-    _controller = AnimationController(
-      duration: Duration(seconds: 2),
-      vsync: this,
-    );
-
-    _fadeInAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeIn,
-    );
-
-    _slideInAnimation = Tween<Offset>(
-      begin: Offset(0.0, 1.0),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeInOut,
-      ),
-    );
-
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  // Sign in with Email and Password
-  // Helper method to update isLoggedin status in Firestore
-  Future<void> _updateLoginStatus(User user, bool isLoggedin) async {
-    try {
-      await _firestore.collection('users').doc(user.uid).update({'isLoggedin': isLoggedin});
-    } catch (e) {
-      print("Error updating login status: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update login status')),
-      );
-    }
-  }
-
-  // Sign in with Email and Password
   Future<void> _signInWithEmail() async {
+    setState(() => _isLoading = true);
     try {
       UserCredential userCredential = await _auth.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      // Update login status to true in Firestore
+      // Create an instance of AuthService
+      AuthService authService = AuthService();
+
+      // Store FCM Token via AuthService
+      await authService.storeFCMToken();
+
       await _updateLoginStatus(userCredential.user!, true);
 
-      // Navigate to home screen
-      Navigator.pushNamed(context, '/homeScreen');
+      Navigator.pushReplacementNamed(context, '/homeScreen');
     } catch (e) {
-      print("Error signing in with email and password: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to sign in with email')),
-      );
+      _showSnackBar('Failed to sign in: ${e.toString()}');
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
-  // Sign in with Google
   Future<void> _signInWithGoogle() async {
     try {
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return; // User canceled the login
+      if (googleUser == null) return;
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final AuthCredential credential = GoogleAuthProvider.credential(
@@ -103,51 +58,48 @@ class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderSt
 
       UserCredential userCredential = await _auth.signInWithCredential(credential);
 
-      // Update login status to true in Firestore
+      // Create an instance of AuthService
+      AuthService authService = AuthService();
+
+      // Store FCM Token via AuthService
+      await authService.storeFCMToken();
+
       await _updateLoginStatus(userCredential.user!, true);
 
-      Navigator.pushNamed(context, '/homeScreen');
+      Navigator.pushReplacementNamed(context, '/homeScreen');
     } catch (e) {
-      print("Error signing in with Google: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to sign in with Google')),
-      );
+      _showSnackBar('Google Sign-In failed: ${e.toString()}');
     }
   }
+  Future<void> _updateLoginStatus(User user, bool isLoggedIn) async {
+    await _firestore.collection('users').doc(user.uid).set({
+      'email': user.email,
+      'name': user.displayName,
+      'profilePic': user.photoURL,
+      'isLoggedIn': isLoggedIn,
+    }, SetOptions(merge: true));
+  }
 
-  // Sign in with Facebook
-  Future<void> _signInWithFacebook() async {
-    try {
-      final LoginResult result = await FacebookAuth.instance.login();
-      if (result.status == LoginStatus.success) {
-        final OAuthCredential credential = FacebookAuthProvider.credential(result.accessToken!.tokenString);
-        UserCredential userCredential = await _auth.signInWithCredential(credential);
-
-        // Update login status to true in Firestore
-        await _updateLoginStatus(userCredential.user!, true);
-
-        Navigator.pushNamed(context, '/homeScreen');
-      }
-    } catch (e) {
-      print("Error signing in with Facebook: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to sign in with Facebook')),
-      );
-    }
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isLargeScreen = screenWidth > 600;
+
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text('Sign In'),
+        title: Text('Sign In', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         centerTitle: true,
-        backgroundColor: Colors.teal,
+        backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      extendBodyBehindAppBar: true,
       body: Stack(
         children: [
+          // Background Image
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
@@ -156,145 +108,63 @@ class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderSt
               ),
             ),
           ),
+          // Gradient Overlay
           Container(
-            color: Colors.black.withOpacity(0.7),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+              ),
+            ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: FadeTransition(
-              opacity: _fadeInAnimation,
-              child: SlideTransition(
-                position: _slideInAnimation,
+          // Main Content
+          Center(
+            child: FadeIn(
+              duration: Duration(milliseconds: 600),
+              child: SlideInUp(
+                duration: Duration(milliseconds: 800),
                 child: Container(
+                  width: isLargeScreen ? screenWidth * 0.5 : screenWidth * 0.9,
+                  padding: EdgeInsets.all(isLargeScreen ? 30 : 20),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(12.0),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 15, spreadRadius: 2)],
                   ),
-                  padding: const EdgeInsets.all(20.0),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SizedBox(height: 40.0),
-                      Center(
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          width: 150,
-                          height: 150,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                      SizedBox(height: 24.0),
-                      TextField(
-                        controller: _emailController,
-                        decoration: InputDecoration(
-                          labelText: 'Email',
-                          labelStyle: TextStyle(color: Colors.black),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.blueAccent, width: 2.0),
+                      // Logo with Animation
+                      BounceInDown(
+                        duration: Duration(milliseconds: 800),
+                        child: Center(
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            width: isLargeScreen ? 150 : 100,
+                            height: isLargeScreen ? 150 : 100,
                           ),
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.email, color: Colors.blueAccent),
                         ),
-                        keyboardType: TextInputType.emailAddress,
-                        style: TextStyle(color: Colors.black),
                       ),
-                      SizedBox(height: 16.0),
-                      TextField(
-                        controller: _passwordController,
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          labelStyle: TextStyle(color: Colors.black),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.blueAccent, width: 2.0),
-                          ),
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.lock, color: Colors.blueAccent),
-                        ),
-                        obscureText: true,
-                        style: TextStyle(color: Colors.black),
-                      ),
-                      SizedBox(height: 8.0),
+                      SizedBox(height: 20),
+                      _buildTextField("Email", _emailController, Icons.email, false, isLargeScreen),
+                      SizedBox(height: 16),
+                      _buildTextField("Password", _passwordController, Icons.lock, true, isLargeScreen),
+                      SizedBox(height: 8),
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
                           onPressed: () {},
-                          child: Text(
-                            'Forgot Password?',
-                            style: TextStyle(color: Colors.blue),
-                          ),
+                          child: Text('Forgot Password?', style: TextStyle(color: Colors.teal)),
                         ),
                       ),
-                      SizedBox(height: 16.0),
-                      ElevatedButton(
-                        onPressed: _signInWithEmail,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 15.0),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.0),
-                          ),
-                          backgroundColor: Colors.blueAccent,
-                          elevation: 5,
-                        ),
-                        child: Text(
-                          'SIGN IN',
-                          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
-                      ),
-                      SizedBox(height: 16.0),
-                      Row(
-                        children: <Widget>[
-                          Expanded(child: Divider(thickness: 1.5, color: Colors.blue)),
-                          Text(" Or Sign In With ", style: TextStyle(color: Colors.blue)),
-                          Expanded(child: Divider(thickness: 1.5, color: Colors.blue)),
-                        ],
-                      ),
-                      SizedBox(height: 16.0),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: _signInWithFacebook,
-                            icon: Icon(Icons.facebook, color: Colors.white),
-                            label: Text('Facebook', style: TextStyle(color: Colors.white)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue[900],
-                              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12.0),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 16.0),
-                          ElevatedButton.icon(
-                            onPressed: _signInWithGoogle,
-                            icon: Icon(FontAwesomeIcons.google, color: Colors.white),
-                            label: Text('Google', style: TextStyle(color: Colors.white)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12.0),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 16.0),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text("Don’t have an Account? ", style: TextStyle(color: Colors.blue)),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pushNamed(context, '/signUpScreen');
-                            },
-                            child: Text(
-                              'Sign Up Here',
-                              style: TextStyle(color: Colors.blueAccent),
-                            ),
-                          ),
-                        ],
-                      ),
+                      SizedBox(height: 16),
+                      _buildSignInButton(isLargeScreen),
+                      SizedBox(height: 20),
+                      _buildSocialLoginButtons(isLargeScreen),
+                      SizedBox(height: 20),
+                      _buildSignUpOption(),
                     ],
                   ),
                 ),
@@ -303,6 +173,59 @@ class _SignInScreenState extends State<SignInScreen> with SingleTickerProviderSt
           ),
         ],
       ),
+    );
+  }
+  Widget _buildSignUpOption() {
+    return FadeInUp(
+      duration: Duration(milliseconds: 800),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text("Don’t have an Account? ", style: TextStyle(fontSize: 16)),
+          TextButton(
+            onPressed: () => Navigator.pushNamed(context, '/signUpScreen'),
+            child: Text("Sign Up", style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+  Widget _buildTextField(String label, TextEditingController controller, IconData icon, bool isPassword, bool isLargeScreen) {
+    return TextField(
+      controller: controller,
+      obscureText: isPassword ? _obscureText : false,
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+        prefixIcon: Icon(icon, color: Colors.teal),
+        suffixIcon: isPassword
+            ? IconButton(
+          icon: Icon(_obscureText ? Icons.visibility : Icons.visibility_off, color: Colors.teal),
+          onPressed: () => setState(() => _obscureText = !_obscureText),
+        )
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildSignInButton(bool isLargeScreen) {
+    return ElevatedButton(
+      onPressed: _isLoading ? null : _signInWithEmail,
+      style: ElevatedButton.styleFrom(
+        padding: EdgeInsets.symmetric(vertical: isLargeScreen ? 18 : 16),
+        backgroundColor: Colors.teal,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      child: _isLoading ? CircularProgressIndicator(color: Colors.white) : Text('SIGN IN', style: TextStyle(fontSize: isLargeScreen ? 20 : 18, color: Colors.white)),
+    );
+  }
+
+  Widget _buildSocialLoginButtons(bool isLargeScreen) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(icon: Icon(FontAwesomeIcons.google, color: Colors.red, size: isLargeScreen ? 30 : 24), onPressed: _signInWithGoogle),
+      ],
     );
   }
 }

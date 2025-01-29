@@ -49,10 +49,11 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                       onSaved: (value) => _courseTitle = value,
                       validator: (value) => value!.isEmpty ? 'Please enter a title' : null,
                     ),
-                    _buildTextField(
-                      label: 'Status',
-                      onSaved: (value) => _status = value,
-                      validator: (value) => value!.isEmpty ? 'Please enter the status' : null,
+                    _buildDropdownField(
+                      label: 'Course Status',
+                      value: _status,
+                      items: ['free', 'Premium'],
+                      onChanged: (value) => setState(() => _status = value),
                     ),
                     _buildTextField(
                       label: 'Subject',
@@ -109,7 +110,43 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       colorBlendMode: BlendMode.darken,
     );
   }
-
+  Widget _buildDropdownField({
+    required String label,
+    required String? value,
+    required List<String> items,
+    required void Function(String?) onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: DropdownButtonFormField<String>(
+        value: value,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.blueAccent),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8.0),
+            borderSide: BorderSide(color: Colors.blueAccent),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8.0),
+            borderSide: BorderSide(color: Colors.blueAccent, width: 2.0),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8.0),
+            borderSide: BorderSide(color: Colors.red),
+          ),
+        ),
+        items: items.map((String item) {
+          return DropdownMenuItem<String>(
+            value: item,
+            child: Text(item),
+          );
+        }).toList(),
+        onChanged: onChanged,
+        validator: (value) => value == null ? 'Please select a status' : null,
+      ),
+    );
+  }
   AppBar _buildAppBar() {
     return AppBar(
       title: Text('Add Course', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
@@ -224,6 +261,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
         imageUrl = await courseProvider.uploadImage(_imageFile!);
       }
 
+      // Add Course to Firestore
       await courseProvider.addCourse(
         title: _courseTitle,
         description: _description,
@@ -235,8 +273,14 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
         imageUrl: imageUrl ?? "https://via.placeholder.com/150",
       );
 
+      // Send Notifications to All Users
+      await courseProvider.sendNotificationToAllUsers(
+        title: "New Course Added!",
+        body: "A new course titled '$_courseTitle' is now available. Enroll now!",
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Course added successfully!')),
+        SnackBar(content: Text('Course added successfully! Notification sent to students.')),
       );
 
       setState(() {

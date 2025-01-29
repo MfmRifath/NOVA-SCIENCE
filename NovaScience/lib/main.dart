@@ -1,7 +1,9 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:nova_science/Screens/AdminPanal/EnrollUsersScreen.dart';
 import 'package:nova_science/Screens/StartScreen/HomeScreen.dart';
+import 'package:nova_science/Screens/StartScreen/NotificationScreen.dart';
 import 'package:nova_science/Screens/StartScreen/ProfileScreen.dart';
 import 'package:nova_science/Screens/StartScreen/SignUpScreen.dart';
 import 'package:provider/provider.dart';
@@ -33,7 +35,13 @@ void main() async {
       storageBucket: 'novascience-31488.appspot.com',
     ),
   );
-
+  AuthService authService = AuthService();
+  FirebaseAuth.instance.authStateChanges().listen((User? user) {
+    if (user != null) {
+      authService.storeFCMToken();
+      authService.listenForTokenChanges();
+    }
+  });
   runApp(
     MultiProvider(
       providers: [
@@ -59,6 +67,7 @@ class Routes {
   static const String systemSettings = '/systemSettings';
   static const String courseScreen = '/courseScreen';
   static const String enrollUsersScreen = '/enrollUsers';
+  static const String notifications = '/notifications';
 }
 
 class NovaScience extends StatelessWidget {
@@ -83,6 +92,9 @@ class NovaScience extends StatelessWidget {
             break;
           case Routes.signIn:
             builder = (context) => SignInScreen();
+            break;
+          case Routes.homeScreen:
+            builder = (context) => HomePage();
             break;
           case Routes.homeScreen:
             builder = (context) => HomePage();
@@ -118,6 +130,9 @@ class NovaScience extends StatelessWidget {
             break;
           case Routes.enrollUsersScreen:
             builder = (context) => EnrollUsersScreen();
+            break;
+          case Routes.notifications:
+            builder = (context) => NotificationScreen();
             break;
            // Optional: break here for clarity
         }

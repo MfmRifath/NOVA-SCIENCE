@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -14,6 +15,7 @@ class CourseProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore
       .instance; // Assuming Firebase
   FirebaseAuth? auth;
+  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
 
 
   // Fetch courses from Firestore
@@ -708,6 +710,48 @@ class CourseProvider with ChangeNotifier {
     } catch (e) {
       print("Error updating video: $e");
       rethrow;
+    }
+  }
+  // Function to Send Notification to All Users
+  Future<void> sendNotificationToAllUsers({required String title, required String body}) async {
+    try {
+      QuerySnapshot userSnapshot = await FirebaseFirestore.instance.collection('users').get();
+
+      for (var doc in userSnapshot.docs) {
+        Map<String, dynamic>? userData = doc.data() as Map<String, dynamic>?; // Cast the data
+
+        if (userData != null && userData.containsKey('fcmToken')) {
+          String? token = userData['fcmToken'];
+          if (token != null) {
+            await _sendPushNotification(token, title, body);
+          }
+        }
+
+        // Store notification in Firestore
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'title': title,
+          'body': body,
+          'userId': doc.id,
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+        });
+      }
+    } catch (e) {
+      print("Error sending notifications: $e");
+    }
+  }
+  // Function to Send Push Notification via Firebase Messaging
+  Future<void> _sendPushNotification(String token, String title, String body) async {
+    try {
+      await _firebaseMessaging.sendMessage(
+        to: token,
+        data: {
+          'title': title,
+          'body': body,
+        },
+      );
+    } catch (e) {
+      print("Error sending push notification: $e");
     }
   }
 

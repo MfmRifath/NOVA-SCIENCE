@@ -29,7 +29,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
       isLoading = false;
     });
   }
+  Future<void> _deleteAccount() async {
+    try {
+      User? user = _authService.currentUser;
+      if (user == null) return;
 
+      // Show progress indicator while deleting
+      setState(() => isLoading = true);
+
+      // Delete user data from Firestore
+      await _authService.deleteUser();
+
+      // Delete user from Firebase Authentication
+      await user.delete();
+
+      // Redirect to login page
+      Navigator.of(context).pushReplacementNamed('/join');
+
+      // Show confirmation message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Your account has been deleted successfully.")),
+      );
+    } catch (e) {
+      print("Error deleting account: $e");
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to delete account. Please try again.")),
+      );
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -59,6 +89,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildActionButtons(context),
                 const SizedBox(height: 30),
                 _buildProfileInfoList(),
+                const SizedBox(height: 30),
+                _buildProfileButton(
+                  icon: Icons.delete_forever,
+                  label: "Delete Account",
+                  color: Colors.red,
+                  onTap: () => _confirmDeleteAccount(context),
+                ),
               ],
             ),
           ),
@@ -139,6 +176,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // Action Buttons (Edit and Logout)
+  // Action Buttons (Edit, Logout, and Delete Account)
   Widget _buildActionButtons(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -161,11 +199,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
             color: Colors.redAccent,
             onTap: _signOut,
           ),
+          // Delete Account Button
+
         ],
       ),
     );
   }
-
+  void _confirmDeleteAccount(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Prevent accidental dismiss
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text("Delete Account"),
+          content: Text("Are you sure you want to permanently delete your account? This action cannot be undone."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(), // Close dialog
+              child: Text("Cancel", style: TextStyle(color: Colors.green)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(); // Close dialog before deletion
+                _deleteAccount();
+              },
+              child: Text("Delete", style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
   Widget _buildProfileButton({
     required IconData icon,
     required String label,
