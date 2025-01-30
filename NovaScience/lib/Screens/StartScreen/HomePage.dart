@@ -82,16 +82,24 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: Text(
           _titles.isNotEmpty ? _titles[_selectedIndex] : '',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
         ),
         elevation: 0,
-        backgroundColor: Colors.blueAccent,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.blueAccent, Colors.lightBlueAccent],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         actions: [
           // Notifications Button with Badge
           IconButton(
             icon: Stack(
               children: [
-                Icon(Icons.notifications, size: 28),
+                Icon(Icons.notifications, size: 28, color: Colors.white),
                 Positioned(
                   right: 0,
                   top: 0,
@@ -112,6 +120,11 @@ class _HomePageState extends State<HomePage> {
         controller: _pageController,
         physics: NeverScrollableScrollPhysics(), // Disable swipe gestures
         children: _pages,
+        onPageChanged: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
       ),
 
       // Bottom Navigation Bar with modern styling
@@ -122,17 +135,20 @@ class _HomePageState extends State<HomePage> {
             BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2)),
           ],
         ),
-        child: BottomNavigationBar(
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          selectedItemColor: Colors.blueAccent,
-          unselectedItemColor: Colors.grey,
-          selectedFontSize: 14,
-          unselectedFontSize: 12,
-          iconSize: 26,
-          items: _buildBottomNavigationBarItems(),
+        child: ClipRRect(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          child: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: Colors.white,
+            currentIndex: _selectedIndex,
+            onTap: _onItemTapped,
+            selectedItemColor: Colors.blueAccent,
+            unselectedItemColor: Colors.grey,
+            selectedFontSize: 14,
+            unselectedFontSize: 12,
+            iconSize: 26,
+            items: _buildBottomNavigationBarItems(),
+          ),
         ),
       ),
     );
@@ -170,6 +186,7 @@ class _HomePageState extends State<HomePage> {
 
     return items;
   }
+
   Widget _buildNotificationBadge() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance

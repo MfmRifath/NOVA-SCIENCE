@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nova_science/Service/AuthService.dart';
 import 'package:provider/provider.dart';
@@ -156,126 +157,141 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: Text('Edit Profile')),
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (currentUser == null) {
-      return Scaffold(
-        appBar: AppBar(title: Text('Edit Profile')),
-        body: Center(child: Text('No user data available.')),
+        body: Center(child: LoadingSpinner()),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Edit Profile'),
-        backgroundColor: Colors.blueAccent,
-      ),
+      appBar: _buildAppBar(),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        physics: BouncingScrollPhysics(),
+        padding: EdgeInsets.all(24),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
-              // Profile Image Section
-              GestureDetector(
-                onTap: _pickImage,
-                child: Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 70,
-                      backgroundImage: _profileImage != null
-                          ? FileImage(_profileImage!)
-                          : NetworkImage(
-                        currentUser!.profileImageUrl ?? 'https://via.placeholder.com/150',
-                      ) as ImageProvider,
-                      child: Align(
-                        alignment: Alignment.bottomRight,
-                        child: CircleAvatar(
-                          backgroundColor: Colors.white,
-                          radius: 20,
-                          child: Icon(Icons.camera_alt, color: Colors.blueAccent),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Form Fields
-              _buildTextField(
-                controller: _nameController,
-                label: 'Name',
-                icon: Icons.person,
-              ),
-              _buildTextField(
-                controller: _phoneController,
-                label: 'Phone Number',
-                icon: Icons.phone,
-                keyboardType: TextInputType.phone,
-              ),
-              _buildTextField(
-                controller: _locationController,
-                label: 'Location',
-                icon: Icons.location_on,
-              ),
-              _buildTextField(
-                controller: _bioController,
-                label: 'Bio',
-                icon: Icons.info,
-                maxLines: 3,
-              ),
-
-              // Birthday Picker
-              GestureDetector(
-                onTap: _selectBirthday,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(10),
-                    color: Colors.grey.shade100,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.calendar_today, color: Colors.blueAccent),
-                      const SizedBox(width: 10),
-                      Text(
-                        _birthday != null
-                            ? "${_birthday!.toLocal()}".split(' ')[0]
-                            : "Select your birthday",
-                        style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Save Button
-              ElevatedButton(
-                onPressed: _isUpdating ? null : _updateProfile,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                ),
-                child: _isUpdating
-                    ? CircularProgressIndicator(color: Colors.white)
-                    : Text(
-                  'Save Changes',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
+              _buildProfileImageSection(),
+              SizedBox(height: 32),
+              _buildFormFields(),
+              SizedBox(height: 24),
+              _buildBirthdayPicker(),
+              SizedBox(height: 32),
+              _buildSaveButton(),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  AppBar _buildAppBar() {
+    return AppBar(
+      title: Text('Edit Profile',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade800,
+          )),
+      backgroundColor: Colors.white,
+      elevation: 1,
+      iconTheme: IconThemeData(color: Colors.grey.shade700),
+      centerTitle: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(16),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileImageSection() {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 140,
+          height: 140,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blue.shade100.withOpacity(0.4),
+                blurRadius: 20,
+                spreadRadius: 4,
+              )
+            ],
+          ),
+          child: ClipOval(
+            child: _profileImage != null
+                ? Image.file(_profileImage!, fit: BoxFit.cover)
+                : Image.network(
+              currentUser!.profileImageUrl ?? 'https://via.placeholder.com/150',
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return LoadingSpinner();
+              },
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 0,
+          right: 0,
+          child: GestureDetector(
+            onTap: _pickImage,
+            child: Container(
+              padding: EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  )
+                ],
+              ),
+              child: Icon(
+                FeatherIcons.camera,
+                color: Colors.blue.shade600,
+                size: 24,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFormFields() {
+    return Column(
+      children: [
+        _buildTextField(
+          controller: _nameController,
+          label: 'Full Name',
+          icon: FeatherIcons.user,
+        ),
+        SizedBox(height: 20),
+        _buildTextField(
+          controller: _phoneController,
+          label: 'Phone Number',
+          icon: FeatherIcons.phone,
+          keyboardType: TextInputType.phone,
+        ),
+        SizedBox(height: 20),
+        _buildTextField(
+          controller: _locationController,
+          label: 'Location',
+          icon: FeatherIcons.mapPin,
+        ),
+        SizedBox(height: 20),
+        _buildTextField(
+          controller: _bioController,
+          label: 'Bio',
+          icon: FeatherIcons.edit3,
+          maxLines: 3,
+        ),
+      ],
     );
   }
 
@@ -286,22 +302,112 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     TextInputType keyboardType = TextInputType.text,
     int maxLines = 1,
   }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 10),
-      child: TextFormField(
-        controller: controller,
-        decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Colors.blueAccent),
-          labelText: label,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          filled: true,
-          fillColor: Colors.grey.shade100,
+    return TextFormField(
+      controller: controller,
+      style: TextStyle(color: Colors.grey.shade800),
+      decoration: InputDecoration(
+        prefixIcon: Container(
+          width: 50,
+          alignment: Alignment.center,
+          child: Icon(icon, size: 20, color: Colors.blue.shade600),
         ),
-        keyboardType: keyboardType,
-        maxLines: maxLines,
-        validator: (value) => value == null || value.trim().isEmpty ? 'This field cannot be empty' : null,
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.grey.shade600),
+        floatingLabelStyle: TextStyle(color: Colors.blue.shade600),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.blue.shade600, width: 1.5),
+        ),
+        filled: true,
+        fillColor: Colors.grey.shade50,
+        contentPadding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      ),
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      validator: (value) => value == null || value.trim().isEmpty
+          ? 'This field is required'
+          : null,
+    );
+  }
+
+  Widget _buildBirthdayPicker() {
+    return GestureDetector(
+      onTap: _selectBirthday,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          children: [
+            Icon(FeatherIcons.calendar, size: 20, color: Colors.blue.shade600),
+            SizedBox(width: 16),
+            Text(
+              _birthday != null
+                  ? "${_birthday!.toLocal()}".split(' ')[0]
+                  : "Select your birthday",
+              style: TextStyle(
+                color: _birthday != null
+                    ? Colors.grey.shade800
+                    : Colors.grey.shade500,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _isUpdating ? null : _updateProfile,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.blue.shade600,
+          padding: EdgeInsets.symmetric(vertical: 18),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 2,
+        ),
+        icon: _isUpdating
+            ? SizedBox.shrink()
+            : Icon(FeatherIcons.save, size: 20, color: Colors.white),
+        label: _isUpdating
+            ? LoadingSpinner(color: Colors.white)
+            : Text(
+          'SAVE CHANGES',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class LoadingSpinner extends StatelessWidget {
+  final Color? color;
+
+  const LoadingSpinner({this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: CircularProgressIndicator.adaptive(
+        valueColor: AlwaysStoppedAnimation<Color>(
+          color ?? Colors.blue.shade600,
+        ),
       ),
     );
   }

@@ -722,7 +722,7 @@ class _CourseScreenState extends State<CourseScreen>
   /// Builds the Overview tab content.
   Widget _buildOverview(Course course) {
     final String adminPhoneNumber =
-        "0764505892"; // Replace with the actual admin phone number
+        "0757439885"; // Replace with the actual admin phone number
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 30.0),
@@ -813,9 +813,9 @@ class _CourseScreenState extends State<CourseScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '\$${course.price}',
+                            '\RS:${course.price}',
                             style: const TextStyle(
-                              fontSize: 36,
+                              fontSize: 25,
                               fontWeight: FontWeight.bold,
                               color: Colors.greenAccent,
                             ),

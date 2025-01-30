@@ -53,7 +53,7 @@ class _EnrollUsersScreenState extends State<EnrollUsersScreen> {
                           ),
                         ),
                       ),
-                      itemAsString: (item) => item['name'] ?? 'Unnamed User',
+                      itemAsString: (item) => item['email'] ?? 'Unnamed User',
                       onChanged: (value) {
                         setState(() {
                           selectedUserId = value?['id'];

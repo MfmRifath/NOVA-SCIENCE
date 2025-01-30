@@ -1,5 +1,7 @@
+import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 
 class JoinScreen extends StatelessWidget {
   const JoinScreen({super.key});
@@ -16,145 +18,192 @@ class JoinScreen extends StatelessWidget {
           height: double.infinity,
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.blueAccent.shade100, Colors.lightBlue.shade50],
+              colors: [Colors.blue.shade800, Colors.blue.shade400],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            image: DecorationImage(
-              image: const AssetImage('assets/images/background.jpg'),
-              fit: BoxFit.cover,
-              opacity: 0.2, // Ensure the text is always visible
-            ),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              // Top section: Logo
-              Expanded(
-                flex: 4,
-                child: Center(
-                  child: Hero(
-                    tag: 'logo',
-                    child: Image.asset(
-                      'assets/images/logo.png',
-                      width: screenWidth * 0.6,
-                      height: screenWidth * 0.6,
-                      fit: BoxFit.contain,
+          child: Stack(
+            children: [
+              // Animated background elements
+              Positioned(
+                right: -screenWidth * 0.2,
+                top: -screenHeight * 0.1,
+                child: FadeInLeft(
+                  from: 200,
+                  duration: const Duration(seconds: 2),
+                  child: Container(
+                    width: screenWidth * 0.6,
+                    height: screenWidth * 0.6,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.1),
                     ),
                   ),
                 ),
               ),
 
-              // Middle section: Text content
-              Expanded(
-                flex: 4,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Welcome to NOVA SCIENCE!',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                          textStyle: const TextStyle(
-                            fontSize: 28.0,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blueAccent,
+              // Main content
+              Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  // Top section: Logo with animation
+                  Expanded(
+                    flex: 4,
+                    child: ZoomIn(
+                      duration: const Duration(milliseconds: 800),
+                      child: Center(
+                        child: Hero(
+                          tag: 'logo',
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            width: screenWidth * 0.5,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20.0),
-                      Text(
-                        'Begin your journey with NOVA SCIENCE and unlock your full potential! Explore A/L Science, O/L Maths, and so much more with expertly crafted courses designed just for you.',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                          textStyle: const TextStyle(
-                            fontSize: 16.0,
-                            color: Colors.black87,
-                            height: 1.6,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
 
-              // Bottom section: Buttons
-              Expanded(
-                flex: 3,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/signIn');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: Size(double.infinity, 55),
-                          backgroundColor: Colors.blueAccent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.0),
-                          ),
-                          elevation: 5,
-                        ),
-                        icon: const Icon(Icons.login, color: Colors.white),
-                        label: Text(
-                          'Sign In',
-                          style: GoogleFonts.poppins(
-                            textStyle: const TextStyle(
-                              fontSize: 18.0,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                  // Middle section: Text content
+                  Expanded(
+                    flex: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          FadeInDown(
+                            from: 60,
+                            duration: const Duration(milliseconds: 600),
+                            child: Text(
+                              'Welcome to NOVA SCIENCE!',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.poppins(
+                                fontSize: 28.0,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 15.0),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/signUp');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: Size(double.infinity, 55),
-                          backgroundColor: Colors.green,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.0),
-                          ),
-                          elevation: 5,
-                        ),
-                        icon: const Icon(Icons.person_add, color: Colors.white),
-                        label: Text(
-                          'Sign Up',
-                          style: GoogleFonts.poppins(
-                            textStyle: const TextStyle(
-                              fontSize: 18.0,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                          const SizedBox(height: 24.0),
+                          FadeInUp(
+                            from: 40,
+                            delay: const Duration(milliseconds: 200),
+                            duration: const Duration(milliseconds: 800),
+                            child: Text(
+                              'Begin your journey with NOVA SCIENCE and unlock your full potential! Explore A/L Science, O/L Maths, and more with expertly crafted courses.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.poppins(
+                                fontSize: 16.0,
+                                fontWeight: FontWeight.w400,
+                                color: Colors.white.withOpacity(0.9),
+                                height: 1.6,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: 20.0),
-
-                      // Footer
-                      Text(
-                        '© 2024 NOVA SCIENCE. All Rights Reserved.',
-                        style: GoogleFonts.poppins(
-                          textStyle: const TextStyle(
-                            fontSize: 14.0,
-                            color: Colors.black54,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+
+                  // Bottom section: Buttons
+                  Expanded(
+                    flex: 3,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 32.0, vertical: 24.0),
+                      child: Column(
+                        children: [
+                          FadeInRight(
+                            delay: const Duration(milliseconds: 400),
+                            duration: const Duration(milliseconds: 600),
+                            child: _AnimatedButton(
+                              onPressed: () => Navigator.pushNamed(context, '/signIn'),
+                              label: 'Sign In',
+                              icon: Icons.login_rounded,
+                              color: Colors.white,
+                              textColor: Colors.blue.shade800,
+                            ),
+                          ),
+                          const SizedBox(height: 16.0),
+                          FadeInLeft(
+                            delay: const Duration(milliseconds: 600),
+                            duration: const Duration(milliseconds: 600),
+                            child: _AnimatedButton(
+                              onPressed: () => Navigator.pushNamed(context, '/signUp'),
+                              label: 'Create Account',
+                              icon: Icons.person_add_alt_1_rounded,
+                              color: Colors.amber.shade400,
+                              textColor: Colors.black87,
+                            ),
+                          ),
+                          const Spacer(),
+                          ElasticIn(
+                            delay: const Duration(milliseconds: 1000),
+                            child: FadeInUp(
+                              child: Text(
+                                '© 2024 NOVA SCIENCE. All Rights Reserved.',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12.0,
+                                  color: Colors.white.withOpacity(0.7),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final Color textColor;
+
+  const _AnimatedButton({
+    required this.onPressed,
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Bounce(
+      infinite: true,
+      duration: const Duration(seconds: 2),
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: textColor,
+          minimumSize: const Size(double.infinity, 56),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16.0),
+          ),
+          elevation: 4,
+          shadowColor: Colors.black26,
+          animationDuration: const Duration(milliseconds: 200),
+        ),
+        icon: Icon(icon, size: 24),
+        label: Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 16.0,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),

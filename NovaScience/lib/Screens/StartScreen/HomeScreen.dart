@@ -48,10 +48,24 @@ class _HomeScreenState extends State<HomeScreen> {
       if (query != _searchQuery) {
         setState(() {
           _searchQuery = query;
-          print("Search Query Updated: $_searchQuery"); // Debug Statement
         });
       }
     });
+  }
+
+  Future<List<QueryDocumentSnapshot<Object?>>> _getFilteredCourses(Future<List<QueryDocumentSnapshot<Object?>>?>? futureCourses) async {
+    final courses = await futureCourses?.then((value) => value ?? <QueryDocumentSnapshot<Object?>>[]) ?? <QueryDocumentSnapshot<Object?>>[];
+    if (_searchQuery.isEmpty) {
+      return courses;
+    } else {
+      return courses.where((course) {
+        final data = course.data() as Map<String, dynamic>?;
+        final title = data?['courseTitle']?.toString().toLowerCase() ?? '';
+        final instructor = data?['instructor']?.toString().toLowerCase() ?? '';
+        final subject = data?['subject']?.toString().toLowerCase() ?? '';
+        return title.contains(_searchQuery) || instructor.contains(_searchQuery) || subject.contains(_searchQuery);
+      }).toList();
+    }
   }
 
   Future<void> _checkAdminStatus() async {
@@ -84,19 +98,6 @@ class _HomeScreenState extends State<HomeScreen> {
     print("Data Refreshed"); // Debug Statement
   }
 
-  Future<List<QueryDocumentSnapshot<Object?>>> _getFilteredCourses(Future<List<QueryDocumentSnapshot<Object?>>?>? futureCourses) async {
-    final courses = await futureCourses?.then((value) => value ?? <QueryDocumentSnapshot<Object?>>[]) ?? <QueryDocumentSnapshot<Object?>>[];
-    if (_searchQuery.isEmpty) {
-      return courses;
-    } else {
-      return courses.where((course) {
-        final data = course.data() as Map<String, dynamic>?;
-        final title = data?['courseTitle']?.toString().toLowerCase() ?? '';
-        final description = data?['description']?.toString().toLowerCase() ?? '';
-        return title.contains(_searchQuery) || description.contains(_searchQuery);
-      }).toList();
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
