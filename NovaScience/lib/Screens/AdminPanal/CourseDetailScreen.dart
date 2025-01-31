@@ -261,9 +261,7 @@ class CourseDetailScreen extends StatelessWidget {
     );
   }
 
-  /// Builds the enrolled students section with the Unenroll button.
-  Widget _buildEnrolledStudents(
-      BuildContext context, AuthService authService, String courseId) {
+  Widget _buildEnrolledStudents(BuildContext context, AuthService authService, String courseId) {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -277,62 +275,69 @@ class CourseDetailScreen extends StatelessWidget {
               ),
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           FutureBuilder<List<CustomUser>>(
             future: authService.getUsersEnrolledInCourse(courseId),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return CircularProgressIndicator();
+                return const CircularProgressIndicator();
               }
               if (snapshot.hasError) {
-                return Text(
-                  'Unable to load students',
-                  style: TextStyle(color: Colors.red),
-                );
+                return Text('Unable to load students', style: TextStyle(color: Colors.red));
               }
+
               final students = snapshot.data ?? [];
+
               if (students.isEmpty) {
                 return Text('No students enrolled yet.');
               }
+
               return ListView.separated(
                 shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
+                physics: const NeverScrollableScrollPhysics(),
                 itemCount: students.length,
-                separatorBuilder: (context, index) => Divider(),
+                separatorBuilder: (context, index) => const Divider(),
                 itemBuilder: (context, index) {
                   final student = students[index];
+
+                  // Get enrollment details for the specific course
+                  final enrollment = student.enrollments?.firstWhere(
+                        (enrollment) => enrollment.courseId == courseId,
+                  );
+
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundImage: CachedNetworkImageProvider(
-                        student.profileImageUrl != null &&
-                            student.profileImageUrl!.isNotEmpty
+                        student.profileImageUrl != null && student.profileImageUrl!.isNotEmpty
                             ? student.profileImageUrl!
                             : 'https://via.placeholder.com/150',
                       ),
-                      backgroundColor: Colors.grey.shade200,
-                      child: student.profileImageUrl == null ||
-                          student.profileImageUrl!.isEmpty
-                          ? Text(
-                        _getInitials(student.name ?? ''),
-                        style: TextStyle(color: Colors.teal),
-                      )
-                          : null,
                     ),
-                    title: Text(
-                      student.name ?? 'Unnamed Student',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                    title: Text(student.name ?? 'Unnamed Student'),
                     subtitle: Text(student.email ?? 'No Email'),
                     trailing: IconButton(
-                      icon: Icon(Icons.remove_circle, color: Colors.redAccent),
+                      icon: Icon(Icons.remove_circle, color: Colors.red),
                       tooltip: 'Unenroll Student',
                       onPressed: () {
-                        _showUnenrollConfirmationDialog(
-                            context, student.id!, courseId);
+                        _showUnenrollConfirmationDialog(context, student.id ?? '', courseId);
                       },
                     ),
                     onTap: () {
-                      // Optional: Navigate to student's profile or details
+                      if (enrollment != null) {
+                        _showEnrollmentDetails(
+                          context,
+                          student.name ?? 'Unnamed Student',
+                          enrollment.enrollmentDate,
+                          enrollment.endDate,
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Enrollment details not available.'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
                     },
                   );
                 },
@@ -344,6 +349,35 @@ class CourseDetailScreen extends StatelessWidget {
     );
   }
 
+  void _showEnrollmentDetails(
+      BuildContext context,
+      String studentName,
+      DateTime enrollmentDate,
+      DateTime endDate,
+      ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enrollment Details'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Student: $studentName'),
+            const SizedBox(height: 8),
+            Text('Enrollment Date: ${DateFormat.yMMMd().format(enrollmentDate)}'),
+            Text('End Date: ${DateFormat.yMMMd().format(endDate)}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
   /// Extracts initials from a name string.
   String _getInitials(String name) {
     List<String> names = name.trim().split(' ');
@@ -374,8 +408,9 @@ class CourseDetailScreen extends StatelessWidget {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
               onPressed: () async {
+                // Use the root context for showing SnackBar
                 Navigator.of(ctx).pop();
-                await _unenrollStudent(userId, courseId, context);
+                await _unenrollStudent(context, userId, courseId);
               },
               child: Text('Yes, Unenroll'),
             ),
@@ -384,34 +419,53 @@ class CourseDetailScreen extends StatelessWidget {
       },
     );
   }
-
-  /// Unenrolls the student from the course.
-  Future<void> _unenrollStudent(
-      String userId, String courseId, BuildContext context) async {
+  Future<void> _unenrollStudent(BuildContext rootContext, String userId, String courseId) async {
     try {
-      // Remove the course ID from the user's `enrolledCourses` field in Firestore.
-      await FirebaseFirestore.instance.collection('users').doc(userId).update({
-        'enrolledCourses': FieldValue.arrayRemove([courseId]),
-      });
+      // Fetch the user's enrolledCourses
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+      List<dynamic> enrolledCourses = userData['enrolledCourses'] ?? [];
 
-      // Show success message.
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Student unenrolled successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      // Find the course object to remove
+      Map<String, dynamic>? courseToRemove;
+      for (var course in enrolledCourses) {
+        if (course['courseId'] == courseId) {
+          courseToRemove = course as Map<String, dynamic>;
+          break;
+        }
+      }
+
+      // If the course was found, remove it
+      if (courseToRemove != null) {
+        await FirebaseFirestore.instance.collection('users').doc(userId).update({
+          'enrolledCourses': FieldValue.arrayRemove([courseToRemove]),
+        });
+
+        // Show success SnackBar
+        ScaffoldMessenger.of(rootContext).showSnackBar(
+          SnackBar(
+            content: Text('Student successfully unenrolled.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(rootContext).showSnackBar(
+          SnackBar(
+            content: Text('Course not found for this student.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
-      // Show error message.
-      ScaffoldMessenger.of(context).showSnackBar(
+      print('Error unenrolling student: $e');
+      ScaffoldMessenger.of(rootContext).showSnackBar(
         SnackBar(
-          content: Text('Failed to unenroll student. Please try again.'),
+          content: Text('Failed to unenroll student.'),
           backgroundColor: Colors.red,
         ),
       );
     }
   }
-
   /// Builds the sections of the course.
   Widget _buildSections(BuildContext context, Course course) {
     if (course.sections.isEmpty) {
@@ -796,4 +850,6 @@ class CourseDetailScreen extends StatelessWidget {
       ),
     );
   }
+
+
 }

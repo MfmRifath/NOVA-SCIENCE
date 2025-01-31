@@ -42,7 +42,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _phoneController.text = currentUser!.phoneNumber ?? '';
         _locationController.text = currentUser!.location ?? '';
         _bioController.text = currentUser!.bio ?? '';
-        _birthday = currentUser!.birthday?.toDate();
+        _birthday = (currentUser!.birthday != null) as DateTime?;
       });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -395,6 +395,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 }
+
 
 class LoadingSpinner extends StatelessWidget {
   final Color? color;

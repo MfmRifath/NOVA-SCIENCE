@@ -10,6 +10,7 @@ class EnrollUsersScreen extends StatefulWidget {
 class _EnrollUsersScreenState extends State<EnrollUsersScreen> {
   String? selectedUserId;
   String? selectedCourseId;
+  DateTime? enrollmentEndDate; // Variable to store the selected end date
 
   @override
   Widget build(BuildContext context) {
@@ -122,11 +123,63 @@ class _EnrollUsersScreenState extends State<EnrollUsersScreen> {
               ),
             ),
 
+            SizedBox(height: 16),
+
+            // Card for selecting enrollment end date
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Select Enrollment End Date',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final selectedDate = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now(),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime(DateTime.now().year + 5),
+                        );
+                        if (selectedDate != null) {
+                          setState(() {
+                            enrollmentEndDate = selectedDate;
+                          });
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                      ),
+                      child: Text(
+                        enrollmentEndDate == null
+                            ? 'Select End Date'
+                            : 'End Date: ${enrollmentEndDate!.toLocal().toString().split(' ')[0]}',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             SizedBox(height: 20),
 
-            // Enroll Button (disabled if either dropdown is not selected)
+            // Enroll Button (disabled if either dropdown or end date is not selected)
             ElevatedButton(
-              onPressed: (selectedUserId != null && selectedCourseId != null)
+              onPressed: (selectedUserId != null && selectedCourseId != null && enrollmentEndDate != null)
                   ? () => _showConfirmationDialog(context)
                   : null,
               style: ElevatedButton.styleFrom(
@@ -181,8 +234,8 @@ class _EnrollUsersScreenState extends State<EnrollUsersScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
               onPressed: () async {
                 Navigator.of(ctx).pop();
-                if (selectedUserId != null && selectedCourseId != null) {
-                  await enrollUserInCourse(selectedUserId!, selectedCourseId!);
+                if (selectedUserId != null && selectedCourseId != null && enrollmentEndDate != null) {
+                  await enrollUserInCourse(selectedUserId!, selectedCourseId!, enrollmentEndDate!);
                 }
               },
               child: Text('Yes, Enroll'),
@@ -193,11 +246,23 @@ class _EnrollUsersScreenState extends State<EnrollUsersScreen> {
     );
   }
 
-  Future<void> enrollUserInCourse(String userId, String courseId) async {
+  Future<void> enrollUserInCourse(String userId, String courseId, DateTime enrollmentEndDate) async {
     try {
+      // Get the current date as the enrollment date
+      DateTime enrollmentDate = DateTime.now();
+
+      // Update the user's document with the enrollment details
       await FirebaseFirestore.instance.collection('users').doc(userId).update({
-        'enrolledCourses': FieldValue.arrayUnion([courseId]),
+        'enrolledCourses': FieldValue.arrayUnion([
+          {
+            'courseId': courseId,
+            'enrollmentDate': enrollmentDate,
+            'enrollmentEndDate': enrollmentEndDate,
+          }
+        ]),
       });
+
+      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('User enrolled successfully!'),
@@ -211,6 +276,7 @@ class _EnrollUsersScreenState extends State<EnrollUsersScreen> {
         selectedCourseId = null;
       });
     } catch (e) {
+      // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to enroll user. Please try again.'),

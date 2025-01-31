@@ -14,6 +14,7 @@ class AuthService with ChangeNotifier {
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
   CustomUser? _user;
+
   CustomUser? get user => _user;
 
   // Public getter for the current Firebase user
@@ -68,11 +69,11 @@ class AuthService with ChangeNotifier {
         profileImageUrl: '',
         phoneNumber: phoneNumber,
         location: location,
-        birthday: birthday,
+        birthday: birthday?.toDate(),
         bio: bio,
         isLoggedin: true,
-        registeredDate: Timestamp.now(),
-        enrolledCourses: [],
+        registeredDate: DateTime.now(),
+        enrollments: [],
       );
 
       // Upload profile image to Firebase Storage
@@ -134,11 +135,11 @@ class AuthService with ChangeNotifier {
         profileImageUrl: '',
         phoneNumber: phoneNumber,
         location: location,
-        birthday: birthday,
+        birthday: birthday?.toDate(),
         bio: bio,
         isLoggedin: true,
-        registeredDate: Timestamp.now(),
-        enrolledCourses: [],
+        registeredDate: DateTime.now(),
+        enrollments: [],
       );
 
       // Upload profile image to Firebase Storage
@@ -354,6 +355,7 @@ class AuthService with ChangeNotifier {
       // Optionally, handle errors by rethrowing or using another mechanism
     }
   }
+
   Future<void> deleteUser() async {
     User? user = _auth.currentUser;
     if (user != null) {
@@ -375,6 +377,7 @@ class AuthService with ChangeNotifier {
       }
     }
   }
+
   /// Updates a user's data by their email.
   Future<void> updateUserByEmail({
     required String email,
@@ -421,44 +424,16 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Retrieves all users enrolled in a specific course.
-  Future<List<CustomUser>> getUsersEnrolledInCourse(String courseId) async {
-    List<CustomUser> enrolledStudents = [];
-    try {
-      // Fetch users where 'enrolledCourses' contains courseId
-      QuerySnapshot query = await _firestore
-          .collection('users')
-          .where('enrolledCourses', arrayContains: courseId)
-          .get();
 
-      for (var doc in query.docs) {
-        // Convert each user document into a CustomUser
-        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        enrolledStudents.add(CustomUser.fromMap(data, doc.id));
-      }
-    } catch (e) {
-      print('Error fetching enrolled students: $e');
-    }
-    return enrolledStudents;
-  }
-
-  /// Deletes a file from Firebase Storage based on its URL.
-  Future<void> deleteFileByUrl(String url) async {
-    try {
-      await _storage.refFromURL(url).delete();
-      notifyListeners(); // Notify after deleting a file
-    } catch (e) {
-      print('Error deleting file by URL: $e');
-      // Optionally, handle errors by rethrowing or using another mechanism
-    }
-  }
   Future<void> storeFCMToken() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
         String? token = await FirebaseMessaging.instance.getToken();
         if (token != null) {
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+          await FirebaseFirestore.instance.collection('users')
+              .doc(user.uid)
+              .set(
             {'fcmToken': token},
             SetOptions(merge: true), // Merge with existing data
           );
@@ -468,43 +443,47 @@ class AuthService with ChangeNotifier {
       }
     }
   }
+
   /// Fetches all users from Firestore and converts them to CustomUser objects.
   Future<List<CustomUser>> fetchAllUsers() async {
     List<CustomUser> users = [];
     try {
-      QuerySnapshot querySnapshot =
-      await _firestore.collection('users').get();
+      QuerySnapshot querySnapshot = await _firestore.collection('users').get();
       for (var doc in querySnapshot.docs) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        users.add(CustomUser(
-          id: doc.id,
-          name: data['name'] ?? '',
-          email: data['email'] ?? '',
-          role: data['role'] ?? '',
-          profileImageUrl: data['profileImageUrl'] ?? '',
-          phoneNumber: data['phoneNumber'],
-          location: data['location'],
-          birthday: data['birthday'],
-          bio: data['bio'],
-          isLoggedin: data['isLoggedin'] ?? false,
-          registeredDate: data['registeredDate'],
-          enrolledCourses: List<String>.from(data['enrolledCourses'] ?? []),
-        ));
+        users.add(CustomUser.fromMap(data, doc.id));
       }
-      notifyListeners(); // Notify after fetching all users
     } catch (e) {
       print('Error fetching all users: $e');
-      // Optionally, handle errors by rethrowing or using another mechanism
     }
     return users;
   }
   Future<int> getEnrollmentCount(String courseId) async {
     try {
-      QuerySnapshot query = await _firestore
-          .collection('users')
-          .where('enrolledCourses', arrayContains: courseId)
-          .get();
-      return query.docs.length; // Return the number of enrolled users
+      // Fetch all users
+      QuerySnapshot query = await FirebaseFirestore.instance.collection('users').get();
+
+      int count = 0;
+
+      // Loop through each user and check their enrolled courses
+      for (var doc in query.docs) {
+        Map<String, dynamic> userData = doc.data() as Map<String, dynamic>;
+        List<dynamic>? enrolledCourses = userData['enrolledCourses'];
+
+        if (enrolledCourses != null) {
+          // Check if the user is enrolled in the specific course
+          bool isEnrolled = enrolledCourses.any((course) {
+            if (course is Map<String, dynamic> && course['courseId'] == courseId) {
+              return true;
+            }
+            return false;
+          });
+
+          if (isEnrolled) count++;
+        }
+      }
+
+      return count; // Return the total count of enrolled users
     } catch (e) {
       print('Error fetching enrollment count: $e');
       return 0; // Default to 0 in case of an error
@@ -521,4 +500,60 @@ class AuthService with ChangeNotifier {
       }
     });
   }
-}
+
+  Future<List<CustomUser>> getUsersEnrolledInCourse(String courseId) async {
+    try {
+      QuerySnapshot querySnapshot = await FirebaseFirestore.instance.collection('users').get();
+
+      List<CustomUser> enrolledUsers = [];
+      for (var doc in querySnapshot.docs) {
+        Map<String, dynamic> userData = doc.data() as Map<String, dynamic>;
+
+        // Parse the user's enrollments
+        List<Enrollment>? enrollments = CustomUser.convertEnrollments(userData['enrolledCourses']);
+
+        // Check if the user is enrolled in the course
+        bool isEnrolled = enrollments?.any((enrollment) => enrollment.courseId == courseId) ?? false;
+
+        if (isEnrolled) {
+          enrolledUsers.add(CustomUser.fromMap(userData, doc.id));
+        }
+      }
+
+      return enrolledUsers;
+    } catch (e) {
+      print('Error fetching enrolled users: $e');
+      return [];
+    }
+  }
+  Future<void> checkAndUnenrollExpiredCourses(String userId) async {
+    try {
+      // Fetch the user's enrolled courses
+      DocumentSnapshot userDoc =
+      await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+
+      List<dynamic> enrolledCourses = userData['enrolledCourses'] ?? [];
+
+      // Filter out expired courses
+      List<dynamic> updatedCourses = enrolledCourses.where((course) {
+        if (course is Map<String, dynamic>) {
+          DateTime endDate =
+          (course['enrollmentEndDate'] as Timestamp).toDate();
+          return endDate.isAfter(DateTime.now()); // Keep valid courses
+        }
+        return false;
+      }).toList();
+
+      // Update Firestore only if changes are needed
+      if (enrolledCourses.length != updatedCourses.length) {
+        await FirebaseFirestore.instance.collection('users').doc(userId).update({
+          'enrolledCourses': updatedCourses,
+        });
+        print('Removed expired courses for user: $userId');
+      }
+    } catch (e) {
+      print('Error checking expired courses: $e');
+    }
+  }
+  }

@@ -59,7 +59,7 @@ class _CourseScreenState extends State<CourseScreen>
 
       if (currentUser != null && _course != null) {
         // Check if the user is enrolled in the course
-        isEnrolled = currentUser.enrolledCourses?.contains(_course!.id) ?? false;
+        isEnrolled = currentUser.enrollments?.contains(_course!.id) ?? false;
         // Check if the user is an Admin
         isAdmin = currentUser.role == 'Admin';
       }
@@ -294,7 +294,7 @@ class _CourseScreenState extends State<CourseScreen>
     if (videoUrl == null || videoUrl.isEmpty) return;
 
     String? videoId = YoutubePlayer.convertUrlToId(videoUrl);
-    if (videoId != null) {
+    if (videoId != null && _youtubeController == null) {
       _youtubeController = YoutubePlayerController(
         initialVideoId: videoId,
         flags: const YoutubePlayerFlags(
@@ -304,6 +304,8 @@ class _CourseScreenState extends State<CourseScreen>
           isLive: false,
         ),
       );
+    } else if (videoId != null && _youtubeController != null) {
+      _youtubeController!.load(videoId);
     } else {
       print("Invalid video URL");
     }
@@ -786,7 +788,7 @@ class _CourseScreenState extends State<CourseScreen>
                   Text(
                     'Course Description',
                     style: const TextStyle(
-                      fontSize: 24,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
@@ -795,7 +797,7 @@ class _CourseScreenState extends State<CourseScreen>
                   Text(
                     course.description ?? 'No description available.',
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 13,
                       height: 1.6,
                       color: Colors.white70,
                     ),
@@ -813,9 +815,9 @@ class _CourseScreenState extends State<CourseScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '\RS:${course.price}',
+                            '\RS:${course.price} per month',
                             style: const TextStyle(
-                              fontSize: 25,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: Colors.greenAccent,
                             ),
@@ -837,7 +839,7 @@ class _CourseScreenState extends State<CourseScreen>
                           Text(
                             'Rating: ${course.averageRating?.toStringAsFixed(1) ?? 'N/A'} / 5',
                             style: const TextStyle(
-                              fontSize: 18,
+                              fontSize: 15,
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
                             ),
@@ -850,7 +852,7 @@ class _CourseScreenState extends State<CourseScreen>
                                 color: Colors.amber,
                               ),
                               itemCount: 5,
-                              itemSize: 24.0,
+                              itemSize: 18.0,
                               direction: Axis.horizontal,
                             )
                           else
@@ -1481,8 +1483,10 @@ class _CourseScreenState extends State<CourseScreen>
   /// Builds the Feedbacks tab content.
   Widget _buildFeedbackTab(BuildContext context) {
     return FutureBuilder<CustomUser?>(
-      future: Provider.of<AuthService>(context, listen: false).getCurrentUser(),
-      builder: (BuildContext context, AsyncSnapshot<CustomUser?> snapshot) {
+      future:
+      Provider.of<AuthService>(context, listen: false).getCurrentUser(),
+      builder:
+          (BuildContext context, AsyncSnapshot<CustomUser?> snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
             child: SpinKitDoubleBounce(color: Colors.blueAccent),
@@ -1537,25 +1541,12 @@ class _CourseScreenState extends State<CourseScreen>
               ),
               const SizedBox(height: 10),
               // All Feedbacks List
-              ..._course!.feedbacks.map((fb) => _buildFeedbackCard(fb, currentUser)).toList(),
+              ..._course!.feedbacks
+                  .map((fb) => _buildFeedbackCard(fb, currentUser))
+                  .toList(),
             ],
           );
         }
-      },
-    );
-  }
-
-  /// Builds the existing feedback display.
-  Widget _buildAllFeedbacks(CustomUser currentUser) {
-    if (_course!.feedbacks.isEmpty) {
-      return const Center(child: Text('No feedbacks yet.'));
-    }
-
-    return ListView.builder(
-      itemCount: _course!.feedbacks.length,
-      itemBuilder: (context, index) {
-        final feedback = _course!.feedbacks[index];
-        return _buildFeedbackCard(feedback, currentUser);
       },
     );
   }
@@ -1685,7 +1676,7 @@ class _CourseScreenState extends State<CourseScreen>
                 )
                     : null,
               ),
-              const Divider(), // Add a divider for visual separation
+              const Divider(),
             ],
           ),
         );
@@ -1693,7 +1684,6 @@ class _CourseScreenState extends State<CourseScreen>
     );
   }
 
-  //// Shows a dialog to edit existing feedback.
   /// Shows a dialog to edit existing feedback.
   void _showEditFeedbackDialog(FeedBack feedback, String userName) {
     final TextEditingController _feedbackController =
@@ -1757,7 +1747,6 @@ class _CourseScreenState extends State<CourseScreen>
                         _feedbackController.text,
                         _currentRating);
 
-                    // **Check if the widget is still mounted before proceeding**
                     if (!mounted) return;
 
                     setState(() {
@@ -1777,7 +1766,6 @@ class _CourseScreenState extends State<CourseScreen>
                     // Refresh course data
                     await _initializeCourse();
                   } on FirebaseException catch (e) {
-                    // **Check if the widget is still mounted before showing SnackBar**
                     if (!mounted) return;
 
                     setState(() {
@@ -1785,12 +1773,12 @@ class _CourseScreenState extends State<CourseScreen>
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Failed to update feedback: ${e.message}'),
+                        content:
+                        Text('Failed to update feedback: ${e.message}'),
                         backgroundColor: Colors.red,
                       ),
                     );
                   } catch (e) {
-                    // **Check if the widget is still mounted before showing SnackBar**
                     if (!mounted) return;
 
                     setState(() {
@@ -1798,7 +1786,8 @@ class _CourseScreenState extends State<CourseScreen>
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Failed to update feedback: $e'),
+                        content:
+                        Text('Failed to update feedback: $e'),
                         backgroundColor: Colors.red,
                       ),
                     );
@@ -1817,7 +1806,7 @@ class _CourseScreenState extends State<CourseScreen>
       },
     );
   }
-  /// Deletes a specific feedback entry.
+
   /// Deletes a specific feedback entry.
   void _deleteFeedback(String courseId, FeedBack feedback) async {
     // Show a confirmation dialog before deletion
@@ -1882,7 +1871,6 @@ class _CourseScreenState extends State<CourseScreen>
     }
   }
 
-  /// Builds the feedback submission form.
   /// Builds the feedback submission form.
   Widget _buildFeedbackForm(CustomUser user) {
     return Card(
@@ -2041,7 +2029,6 @@ class _CourseScreenState extends State<CourseScreen>
     );
   }
 
-
   /// Builds the floating action button for adding feedback.
   FloatingActionButton? _buildFloatingActionButton() {
     // Only show FAB to Admins or enrolled users
@@ -2084,7 +2071,14 @@ class _CourseScreenState extends State<CourseScreen>
                 ),
               ),
           showVideoProgressIndicator: true,
-          onReady: () => print("Player is ready"),
+          onReady: () {
+            if (_youtubeController == null &&
+                _course!.sections.isNotEmpty &&
+                _course!.sections.first.videos.isNotEmpty) {
+              _initializeYoutubePlayer(
+                  _course!.sections.first.videos.first.videoUrl);
+            }
+          },
           onEnded: (metaData) => print("Video has ended"),
         ),
         builder: (context, player) {
@@ -2103,7 +2097,8 @@ class _CourseScreenState extends State<CourseScreen>
                   IconButton(
                     icon: Icon(Icons.delete, semanticLabel: 'Delete Course'),
                     onPressed: () async {
-                      bool confirm = await _showDeleteConfirmation(context);
+                      bool confirm =
+                      await _showDeleteConfirmation(context);
                       if (confirm) {
                         await Provider.of<CourseProvider>(context,
                             listen: false)
@@ -2122,96 +2117,57 @@ class _CourseScreenState extends State<CourseScreen>
             ),
             body: Column(
               children: [
-                // Video Player Logic
-                if ((isEnrolled || isAdmin) && _youtubeController != null)
-                  Hero(
-                    tag: 'videoHero',
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16.0),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: player,
-                      ),
+                // Video Player
+                if (_youtubeController != null &&
+                    (isEnrolled || isAdmin))
+                // Removed Hero widget to prevent conflicts
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16.0),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: player,
                     ),
                   )
-                else if (isAdmin &&
+                else if (!isEnrolled && !isAdmin &&
                     _course!.sections.isNotEmpty &&
                     _course!.sections.first.videos.isNotEmpty)
-                // Show first video for Admins regardless of enrollment
-                  Hero(
-                    tag: 'videoHero',
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16.0),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: YoutubePlayer(
-                          controller: _youtubeController ??
-                              YoutubePlayerController(
-                                initialVideoId: YoutubePlayer.convertUrlToId(
-                                    _course!.sections.first.videos.first.videoUrl!) ??
-                                    '',
-                                flags: const YoutubePlayerFlags(
-                                  autoPlay: false,
-                                  mute: false,
-                                  enableCaption: true,
-                                  isLive: false,
-                                ),
-                              ),
-                          showVideoProgressIndicator: true,
-                          onReady: () {
-                            if (_youtubeController == null) {
-                              _initializeYoutubePlayer(
-                                  _course!.sections.first.videos.first.videoUrl);
-                            }
-                          },
-                          onEnded: (metaData) => print("Video has ended"),
+                // Show only first video for all users
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16.0),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: YoutubePlayer(
+                        controller: YoutubePlayerController(
+                          initialVideoId: YoutubePlayer.convertUrlToId(
+                              _course!.sections.first.videos.first.videoUrl!) ??
+                              '',
+                          flags: const YoutubePlayerFlags(
+                            autoPlay: false,
+                            mute: false,
+                            enableCaption: true,
+                            isLive: false,
+                          ),
                         ),
+                        showVideoProgressIndicator: true,
+                        onReady: () => print("Player is ready"),
+                        onEnded: (metaData) => print("Video has ended"),
                       ),
                     ),
                   )
-                else if (!isEnrolled && !isAdmin)
-                  // Show only first video for all users
-                    (_course!.sections.isNotEmpty &&
-                        _course!.sections.first.videos.isNotEmpty)
-                        ? Hero(
-                      tag: 'videoHero',
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16.0),
-                        child: AspectRatio(
-                          aspectRatio: 16 / 9,
-                          child: YoutubePlayer(
-                            controller: YoutubePlayerController(
-                              initialVideoId: YoutubePlayer.convertUrlToId(
-                                  _course!.sections.first.videos.first.videoUrl!) ??
-                                  '',
-                              flags: const YoutubePlayerFlags(
-                                autoPlay: false,
-                                mute: false,
-                                enableCaption: true,
-                                isLive: false,
-                              ),
-                            ),
-                            showVideoProgressIndicator: true,
-                            onReady: () => print("Player is ready"),
-                            onEnded: (metaData) =>
-                                print("Video has ended"),
-                          ),
-                        ),
-                      ),
-                    )
-                        : Container(
-                      height: 200,
-                      color: Colors.black12,
-                      child: Center(
-                        child: Text(
-                          'No videos available.',
-                          style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey[700],
-                              fontWeight: FontWeight.w500),
-                        ),
+                else
+                  Container(
+                    height: 200,
+                    color: Colors.black12,
+                    child: Center(
+                      child: Text(
+                        'No videos available.',
+                        style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[700],
+                            fontWeight: FontWeight.w500),
                       ),
                     ),
+                  ),
                 const SizedBox(height: 10),
                 // Tab Bar
                 TabBar(
@@ -2268,5 +2224,4 @@ class _CourseScreenState extends State<CourseScreen>
     Provider.of<AuthService>(context, listen: false);
     return authProvider.user?.role == 'Admin';
   }
-
 }

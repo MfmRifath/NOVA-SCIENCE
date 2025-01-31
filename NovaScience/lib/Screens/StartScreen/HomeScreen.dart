@@ -29,7 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _debounce;
   String _searchQuery = '';
   bool isAdmin = false;
-
+  AuthService authService = AuthService();
   @override
   void initState() {
     super.initState();
@@ -39,6 +39,8 @@ class _HomeScreenState extends State<HomeScreen> {
       Provider.of<CourseProvider>(context, listen: false).fetchCourses();
       Provider.of<AdvertisementProvider>(context, listen: false).fetchAdvertisements();
     });
+    String userId = authService.currentUser!.uid; // Replace with your user logic
+    authService.checkAndUnenrollExpiredCourses(userId);
   }
 
   void _onSearchChanged() {
