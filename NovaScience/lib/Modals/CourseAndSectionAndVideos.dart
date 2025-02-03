@@ -16,6 +16,7 @@ class Course {
   List<String>? enrolledUserIds;
   List<Section> sections;
   List<FeedBack> feedbacks;
+  String? instructorEmail;
 
   Course({
     this.id,
@@ -31,6 +32,7 @@ class Course {
     this.status,
     this.sections = const [],
     this.feedbacks = const [],
+    this.instructorEmail
   });
 
   factory Course.fromMap(Map<String, dynamic> data, String documentId) {
@@ -42,6 +44,7 @@ class Course {
       imageUrl: data['imageUrl'],
       subject: data['subject'],
       duration: data['duration'],
+      instructorEmail: data['instructorEmail'],
       status: data['status'],
       instructor: data['instructor'],
       averageRating: data['averageRating']?.toDouble() ?? 0.0,
@@ -68,6 +71,7 @@ class Course {
       'averageRating': averageRating,
       'status':status,
       'imageUrl': imageUrl,
+      'instructorEmail':instructorEmail,
       'enrolledUserIds': enrolledUserIds ?? [],
       'sections': sections.map((s) => s.toMap()).toList(),
       'feedbacks': feedbacks.map((fb) => fb.toMap()).toList(),

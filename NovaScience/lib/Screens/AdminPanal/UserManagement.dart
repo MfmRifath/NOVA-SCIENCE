@@ -4,6 +4,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'dart:io';
 
 import '../../Modals/User.dart'; // Your user model
@@ -103,58 +104,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
   }
 
-  // Add user method
-  void _addUser() async {
-    CustomUser? newUser = await _showUserDialog();
 
-    if (newUser != null) {
-      try {
-        // Log details for debugging
-        print("Attempting to add user: ${newUser.email}");
-
-        // Create the user in Firebase Authentication
-        UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: newUser.email!,
-          password: 'user123', // Replace with user-provided password
-        );
-
-        // Get the newly created user
-        User? firebaseUser = userCredential.user;
-
-        if (firebaseUser != null) {
-          // Store the user data in Firestore
-          await FirebaseFirestore.instance.collection('users').doc(firebaseUser.uid).set({
-            'name': newUser.name,
-            'email': newUser.email,
-            'role': newUser.role,
-            'isLoggedin': false,
-            'phoneNumber': newUser.phoneNumber,
-            'profileImageUrl': newUser.profileImageUrl,
-            'registeredDate': FieldValue.serverTimestamp(), // Store the registration date
-          });
-
-          // Update UI to reflect the new user added
-          users.add(newUser); // Add the new user to the local list
-          _listKey.currentState?.insertItem(users.length - 1); // Insert the item in AnimatedList
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('User added successfully!'),
-          ));
-          setState(() {});
-        } else {
-          print("Error: User creation failed.");
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('User creation failed.'),
-          ));
-        }
-      } catch (e) {
-        // Log the error for debugging
-        print("Error while adding user: $e");
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to add user: $e'),
-        ));
-      }
-    }
-  }
 
   // Edit user method
   void _editUser(BuildContext context, CustomUser user) async {
@@ -191,60 +141,155 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   // Build user list in UI
   @override
   Widget build(BuildContext context) {
+    final loggedInUsers = users.where((user) => user.isLoggedin ?? false).toList();
+    final otherUsers = users.where((user) => user.isLoggedin == false).toList();
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('User Management'),
+        title: const Text(
+          'User Management',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
         backgroundColor: Colors.blueAccent,
+        centerTitle: true,
+        elevation: 2,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(16),
+          ),
+        ),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildSectionTitle('Currently Logged-in Users'),
-            _buildUserList(users.where((user) => user.isLoggedin ?? false).toList()), // Show logged-in users
+            _buildUserList(loggedInUsers),
             const SizedBox(height: 20),
-            _buildSectionTitle('All Users'),
-            Expanded(
-              child: _buildUserList(users.where((user) => user.isLoggedin == false).toList()), // Show logged-in users
-
-            ),
+            const Divider(thickness: 1),
+            const SizedBox(height: 20),
+            _buildSectionTitle('All Other Users'),
+            _buildUserList(otherUsers),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _addUser,
+        onPressed: () async {
+          // Show the user dialog and wait for a result (e.g., a newly created user)
+          final newUser = await _showUserDialog();
+
+          // If the dialog returns a non-null user, add it to your users list
+          if (newUser != null) {
+            setState(() {
+              users.add(newUser);
+            });
+          }
+        },
         tooltip: 'Add User',
-        child: const Icon(Icons.add),
+        backgroundColor: Colors.blueAccent,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
+      // If you'd like an extended FAB:
+      // floatingActionButton: FloatingActionButton.extended(
+      //   onPressed: _addUser,
+      //   label: const Text('Add User'),
+      //   icon: const Icon(Icons.add),
+      //   backgroundColor: Colors.blueAccent,
+      // ),
     );
   }
 
   Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Text(
-        title,
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOut,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 10 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: Colors.blueAccent, width: 4)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: 20,
+              color: Colors.blueGrey.shade900,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildUserList(List<CustomUser> loggedInUsers) {
     if (loggedInUsers.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 16.0),
-        child: Text('No currently logged-in users.'),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.people_outline_rounded, size: 60, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              'No currently logged-in users.',
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Once users log in, they will appear here.',
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       );
     }
 
-    return ListView.builder(
+    return ListView.separated(
+      // If this is inside another scrollable view, keep `shrinkWrap` and custom scroll physics:
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: loggedInUsers.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 4),
       itemBuilder: (context, index) {
         final user = loggedInUsers[index];
-        return _buildUserTile(user, const AlwaysStoppedAnimation(1.0), index);
+
+        // A simple fade-in animation for each tile
+        return TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeIn,
+          builder: (context, value, child) {
+            return Opacity(
+              opacity: value,
+              child: Transform.translate(
+                offset: Offset(0, 10 * (1 - value)),
+                child: child,
+              ),
+            );
+          },
+          // This calls your existing user tile builder
+          child: _buildUserTile(
+            user,
+            const AlwaysStoppedAnimation(1.0),
+            index,
+          ),
+        );
       },
     );
   }
@@ -253,162 +298,354 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     return SizeTransition(
       sizeFactor: animation,
       child: Card(
-        margin: const EdgeInsets.all(8.0),
-        child: ListTile(
-          leading: user.profileImageUrl != null
-              ? CircleAvatar(
-            backgroundImage: NetworkImage(user.profileImageUrl!),
-          )
-              : const CircleAvatar(
-            child: Icon(Icons.person),
-          ),
-          title: Text(user.name ?? 'No Name'),
-          subtitle: Text(user.email ?? 'No Email'),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.edit),
-                onPressed: () => _editUser(context, user),
+        margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        elevation: 3,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            // Optional: handle tile tap (e.g., show user details)
+          },
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            leading: CircleAvatar(
+              radius: 28,
+              backgroundColor: Colors.grey.shade200,
+              backgroundImage: user.profileImageUrl != null
+                  ? NetworkImage(user.profileImageUrl!)
+                  : null,
+              child: user.profileImageUrl == null
+                  ? const Icon(Icons.person, size: 28, color: Colors.grey)
+                  : null,
+            ),
+            title: Text(
+              user.name ?? 'No Name',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
               ),
-              IconButton(
-                icon: const Icon(Icons.delete),
-                onPressed: () => _deleteUser(user.email!),
+            ),
+            subtitle: Text(
+              user.email ?? 'No Email',
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 14,
               ),
-            ],
+            ),
+            trailing: PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'edit') {
+                  _editUser(context, user);
+                } else if (value == 'delete') {
+                  if (user.email != null) {
+                    _deleteUser(user.email!);
+                  }
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                    leading: Icon(Icons.edit),
+                    title: Text('Edit'),
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                    leading: Icon(Icons.delete),
+                    title: Text('Delete'),
+                  ),
+                ),
+              ],
+              icon: const Icon(Icons.more_vert),
+            ),
           ),
         ),
       ),
     );
   }
-
   Future<CustomUser?> _showUserDialog({CustomUser? user}) async {
-    TextEditingController nameController = TextEditingController(text: user?.name ?? '');
-    TextEditingController emailController = TextEditingController(text: user?.email ?? '');
-    TextEditingController roleController = TextEditingController(text: user?.role ?? '');
-    TextEditingController phoneNumberController = TextEditingController(text: user?.phoneNumber ?? '');
-    TextEditingController passwordController = TextEditingController(); // For password input
-    TextEditingController confirmPasswordController = TextEditingController(); // For password confirmation
+    final authService = Provider.of<AuthService>(context, listen: false);
 
-    String? profileImageUrl = user?.profileImageUrl ?? 'https://via.placeholder.com/150'; // Default image
+    // Controllers
+    final TextEditingController nameController =
+    TextEditingController(text: user?.name ?? '');
+    final TextEditingController emailController =
+    TextEditingController(text: user?.email ?? '');
+    final TextEditingController roleController =
+    TextEditingController(text: user?.role ?? '');
+    final TextEditingController phoneNumberController =
+    TextEditingController(text: user?.phoneNumber ?? '');
+    final TextEditingController passwordController = TextEditingController();
+    final TextEditingController confirmPasswordController = TextEditingController();
 
-    return await showDialog<CustomUser>(
+    // Local variables
+    File? newProfileImage; // We'll pick this file & pass to AuthService
+    bool isUploadingImage = false; // For showing a loading spinner while picking
+
+    // We can still show a placeholder image or the user’s current image
+    String? previewImageUrl = user?.profileImageUrl ?? 'https://via.placeholder.com/150';
+
+    // Key for optional form validation
+    final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
+    return showDialog<CustomUser>(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
+            // --- Helper: Pick an image locally (no Firebase upload here) ---
+            Future<void> pickImage() async {
+              final picker = ImagePicker();
+              final picked = await picker.pickImage(source: ImageSource.gallery);
+              if (picked == null) return;
+              setState(() => isUploadingImage = true);
+
+              try {
+                newProfileImage = File(picked.path);
+                // Update the preview to show the newly picked local image
+                previewImageUrl = null; // We'll show from local file now
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error picking image: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              } finally {
+                setState(() => isUploadingImage = false);
+              }
+            }
+
+            // --- Dialog UI ---
             return AlertDialog(
-              title: Text(user == null ? 'Add User' : 'Edit User'),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Text(
+                user == null ? 'Add User' : 'Edit User',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(labelText: 'Name'),
-                    ),
-                    TextField(
-                      controller: emailController,
-                      decoration: const InputDecoration(labelText: 'Email'),
-                    ),
-                    TextField(
-                      controller: roleController,
-                      decoration: const InputDecoration(labelText: 'Role'),
-                    ),
-                    TextField(
-                      controller: phoneNumberController,
-                      decoration: const InputDecoration(labelText: 'Phone Number'),
-                    ),
-                    TextField(
-                      controller: passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(labelText: 'Password'),
-                    ),
-                    TextField(
-                      controller: confirmPasswordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(labelText: 'Confirm Password'),
-                    ),
-                    const SizedBox(height: 16),
-                    profileImageUrl != null
-                        ? CircleAvatar(
-                      radius: 40,
-                      backgroundImage: NetworkImage(profileImageUrl!),
-                    )
-                        : const CircleAvatar(
-                      radius: 40,
-                      child: Icon(Icons.person),
-                    ),
-                    TextButton(
-                      onPressed: () async {
-                        // Image picking logic
-                        final pickedImage = await ImagePicker().pickImage(source: ImageSource.gallery);
-                        if (pickedImage != null) {
-                          File imageFile = File(pickedImage.path);
-                          // Upload image to Firebase Storage and get URL
-                          Reference storageReference = FirebaseStorage.instance
-                              .ref()
-                              .child('profile_images/${DateTime.now().millisecondsSinceEpoch}');
-                          UploadTask uploadTask = storageReference.putFile(imageFile);
-                          TaskSnapshot taskSnapshot = await uploadTask;
-                          profileImageUrl = await taskSnapshot.ref.getDownloadURL();
-                          setState(() {});
-                        }
-                      },
-                      child: const Text('Change Profile Image'),
-                    ),
-                  ],
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // ========== Avatar & Change Image Button ==========
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 45,
+                            backgroundImage: previewImageUrl != null
+                                ? NetworkImage(previewImageUrl!)
+                                : (newProfileImage != null
+                                ? FileImage(newProfileImage!)
+                                : null),
+                            child: (previewImageUrl == null && newProfileImage == null)
+                                ? const Icon(Icons.person, size: 45)
+                                : null,
+                          ),
+                          if (isUploadingImage)
+                            Container(
+                              width: 90,
+                              height: 90,
+                              alignment: Alignment.center,
+                              decoration: const BoxDecoration(
+                                color: Colors.black38,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: isUploadingImage ? null : pickImage,
+                        icon: const Icon(Icons.camera_alt),
+                        label: const Text('Change Profile Image'),
+                      ),
+                      const Divider(height: 24),
+
+                      // ========== Name ==========
+                      TextFormField(
+                        controller: nameController,
+                        decoration: InputDecoration(
+                          labelText: 'Name',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ========== Email ==========
+                      TextFormField(
+                        controller: emailController,
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ========== Role ==========
+                      TextFormField(
+                        controller: roleController,
+                        decoration: InputDecoration(
+                          labelText: 'Role',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ========== Phone Number ==========
+                      TextFormField(
+                        controller: phoneNumberController,
+                        decoration: InputDecoration(
+                          labelText: 'Phone Number',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        keyboardType: TextInputType.phone,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ========== Password ==========
+                      TextFormField(
+                        controller: passwordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ========== Confirm Password ==========
+                      TextFormField(
+                        controller: confirmPasswordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: 'Confirm Password',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+              actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               actions: [
+                // ========== Cancel Button ==========
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('Cancel'),
                 ),
-                TextButton(
+
+                // ========== Save Button ==========
+                ElevatedButton(
                   onPressed: () async {
-                    if (passwordController.text != confirmPasswordController.text) {
-                      // Show error if passwords do not match
+                    // Basic password check
+                    if (passwordController.text !=
+                        confirmPasswordController.text) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Passwords do not match')),
+                        const SnackBar(
+                          content: Text('Passwords do not match'),
+                        ),
                       );
                       return;
                     }
 
                     try {
                       if (user == null) {
-                        // Create a new user
-                        UserCredential userCredential = await FirebaseAuth.instance
-                            .createUserWithEmailAndPassword(
-                          email: emailController.text,
+                        // --- Create a NEW user via AuthService ---
+                        await authService.addUser(
+                          name: nameController.text.trim(),
+                          email: emailController.text.trim(),
                           password: passwordController.text,
+                          role: roleController.text.trim().isEmpty
+                              ? 'User'
+                              : roleController.text.trim(),
+                          phoneNumber: phoneNumberController.text.trim().isEmpty
+                              ? null
+                              : phoneNumberController.text.trim(),
+                          profileImage: newProfileImage,
                         );
-                        // Handle user creation logic here
                       } else {
-                        // Optionally update password for an existing user
-                        User? currentUser = FirebaseAuth.instance.currentUser;
-                        if (currentUser != null) {
-                          await currentUser.updatePassword(passwordController.text);
+                        // --- UPDATE existing user's Firestore data by Email ---
+                        await authService.updateUserByEmail(
+                          email: user.email ?? '', // old email
+                          updatedData: {
+                            'name': nameController.text.trim(),
+                            'email': emailController.text.trim(),
+                            'role': roleController.text.trim().isEmpty
+                                ? user.role
+                                : roleController.text.trim(),
+                            'phoneNumber': phoneNumberController.text.trim(),
+                          },
+                        );
+
+                        // If we picked a new image, call updateUser to upload & override
+                        if (newProfileImage != null) {
+                          await authService.updateUser(
+                            updatedData: {},
+                            newProfileImage: newProfileImage,
+                          );
                         }
+
+                        // For changing password of a user who is NOT the currently logged-in user,
+                        // you typically need Admin privileges and must use custom logic (e.g., Admin SDK).
+                        // If the edited user is the current user, you can do something like:
+                        //   await FirebaseAuth.instance.currentUser?.updatePassword(passwordController.text);
                       }
 
+                      // Return updated/new CustomUser to the caller
                       Navigator.of(context).pop(
                         CustomUser(
                           name: nameController.text,
                           email: emailController.text,
                           role: roleController.text,
                           phoneNumber: phoneNumberController.text,
-                          profileImageUrl: profileImageUrl,
+                          profileImageUrl: previewImageUrl,
                         ),
                       );
                     } catch (e) {
-                      // Show error message
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: ${e.toString()}')),
+                        SnackBar(content: Text('Error: $e')),
                       );
                     }
                   },
-                  child: const Text('Save'),
+                  style: ElevatedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 14,
+                    ),
+                  ),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             );

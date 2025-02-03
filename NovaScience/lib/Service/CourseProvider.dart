@@ -32,28 +32,40 @@ class CourseProvider with ChangeNotifier {
       print('Error fetching courses: $e');
     }
   }
-  Future<List<QueryDocumentSnapshot<Object?>>?> getEnrolledCourses(String userId) async {
+  Future<List<QueryDocumentSnapshot<Object?>>> getEnrolledCourses(String userId) async {
     try {
       // Fetch the user's document
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
 
       if (userDoc.exists) {
-        final userData = userDoc.data() as Map<String, dynamic>;
-        final enrolledCourseIds = List<String>.from(userData['enrolledCourses'] ?? []);
+        final userData = userDoc.data() as Map<String, dynamic>?;
 
-        if (enrolledCourseIds.isNotEmpty) {
-          // Fetch courses matching the enrolled course IDs
-          QuerySnapshot coursesSnapshot = await FirebaseFirestore.instance
-              .collection('courses')
-              .where(FieldPath.documentId, whereIn: enrolledCourseIds)
-              .get();
+        if (userData != null) {
+          // Extract the course IDs from the array of objects
+          final enrolledCourses = userData['enrolledCourses'] as List<dynamic>? ?? [];
+          final enrolledCourseIds = enrolledCourses
+              .map((courseObj) => (courseObj as Map<String, dynamic>)['courseId'] as String)
+              .toList();
 
-          return coursesSnapshot.docs;
+          if (enrolledCourseIds.isNotEmpty) {
+            // Fetch courses matching the enrolled course IDs
+            final coursesSnapshot = await FirebaseFirestore.instance
+                .collection('courses')
+                .where(FieldPath.documentId, whereIn: enrolledCourseIds)
+                .get();
+
+            return coursesSnapshot.docs;
+          }
         }
       }
     } catch (e) {
       print('Error fetching enrolled courses: $e');
     }
+
+    // Return empty if none found or an error occurred
     return [];
   }
   // Fetch free courses from Firestore
@@ -105,7 +117,7 @@ class CourseProvider with ChangeNotifier {
 
   // Update the addCourse method to include image uploading
   Future<void> addCourse(
-      {String? title, String? description, double? price, DateTime? startDate, DateTime? endDate, String? instructor, String? duration, String? imageUrl, String? status, String? subject}) async {
+      {String? title, String? description, double? price, DateTime? startDate, DateTime? endDate, String? instructor, String? duration, String? imageUrl, String? status, String? subject, String? instructorEmail}) async {
     // Create a new Course object
     Course newCourse = Course(
       courseTitle: title,
@@ -118,6 +130,7 @@ class CourseProvider with ChangeNotifier {
       status: status,
       sections: [],
       subject: subject,
+      instructorEmail: instructorEmail
     );
 
     // Add course to Firestore and get the document ID
@@ -133,13 +146,14 @@ class CourseProvider with ChangeNotifier {
 
   // Edit course method
   Future<void> editCourse(String id, String title, String description,
-      double? price, String subject) async {
+      double? price, String subject, String imageUrl) async {
     try {
       await FirebaseFirestore.instance.collection('courses').doc(id).update({
         'courseTitle': title,
         'description': description,
         'price': price,
         'subject': subject,
+        'imageUrl':imageUrl
       });
 
       // Removed local course update
@@ -799,6 +813,61 @@ class CourseProvider with ChangeNotifier {
       print("Error sending push notification: $e");
     }
   }
+  Future<double> calculateTeacherEarnings(String instructorEmail) async {
+    try {
+      // Fetch all courses created by the teacher
+      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+          .collection('courses')
+          .where('instructorEmail', isEqualTo: instructorEmail)
+          .get();
 
+      double totalEarnings = 0;
+
+      for (var doc in querySnapshot.docs) {
+        Map? courseData = doc.data() as Map?;
+        if (courseData != null) {
+          String courseId = doc.id;
+          double price = (courseData['price'] as num?)?.toDouble() ?? 0.0;
+
+          // Count the number of users enrolled in this course
+          int enrollmentCount = await _getEnrollmentCount(courseId);
+          totalEarnings += price * enrollmentCount;
+        }
+      }
+
+      return totalEarnings;
+    } catch (e) {
+      print('Error calculating teacher earnings: $e');
+      return 0;
+    }
+  }
+
+  Future<int> _getEnrollmentCount(String courseId) async {
+    try {
+      // Fetch all users
+      QuerySnapshot querySnapshot = await FirebaseFirestore.instance.collection('users').get();
+      int count = 0;
+
+      for (var doc in querySnapshot.docs) {
+        Map userData = doc.data() as Map;
+        List? enrolledCourses = userData['enrolledCourses'];
+        if (enrolledCourses != null) {
+          // Check if the user is enrolled in the specific course
+          bool isEnrolled = enrolledCourses.any((course) {
+            if (course is Map && course['courseId'] == courseId) {
+              return true;
+            }
+            return false;
+          });
+          if (isEnrolled) count++;
+        }
+      }
+
+      return count;
+    } catch (e) {
+      print('Error fetching enrollment count: $e');
+      return 0;
+    }
+  }
 }
 

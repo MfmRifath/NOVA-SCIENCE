@@ -64,6 +64,7 @@ dependencies:
   flutter_staggered_animations: ^1.1.1
   liquid_pull_to_refresh: ^3.0.1
   flutter_feather_icons: ^2.0.0+1
+  flutter_animate: ^4.5.2
 
 dev_dependencies:
   flutter_test:

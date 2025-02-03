@@ -197,12 +197,13 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _buildSectionHeader("My Learning", Icons.school, fontSize),
+        _buildMyCoursesSection(courseProvider, gridCount, aspectRatio),
         _buildSectionHeader("Free Courses", Icons.video_library, fontSize),
         _buildCoursesGrid(courseProvider.getFreeCourses(), gridCount, aspectRatio),
         _buildSectionHeader("Premium Courses", Icons.workspace_premium, fontSize),
         _buildCoursesGrid(courseProvider.getPremiumCourses(), gridCount, aspectRatio),
-        _buildSectionHeader("My Learning", Icons.school, fontSize),
-        _buildMyCoursesSection(courseProvider, gridCount, aspectRatio),
+
       ],
     );
   }

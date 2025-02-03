@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
 import '../AdminPanal/AdminPanelScreen.dart';
 import 'HomeScreen.dart';
 import 'ProfileScreen.dart';
 import 'SettingScreen.dart';
+import 'TeacherScreen.dart'; // Import the new TeacherScreen
 
 class HomePage extends StatefulWidget {
   @override
@@ -16,6 +16,7 @@ class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
   bool isAdmin = false;
+  bool isTeacher = false; // New variable to track if the user is a teacher
 
   final List<Widget> _commonPages = [
     HomeScreen(), // Home
@@ -35,24 +36,30 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _checkAdminStatus();
+    _checkUserRole(); // Check both admin and teacher roles
   }
 
-  /// Check if the current user has the admin role
-  Future<void> _checkAdminStatus() async {
+  /// Check if the current user has the admin or teacher role
+  Future<void> _checkUserRole() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       setState(() {
-        isAdmin = userDoc.data()?['role'] == 'Admin'; // Check the role field
+        isAdmin = userDoc.data()?['role'] == 'Admin'; // Check the role field for Admin
+        isTeacher = userDoc.data()?['role'] == 'Teacher'; // Check the role field for Teacher
 
-        // Update pages and titles dynamically based on admin role
+        // Update pages and titles dynamically based on roles
         _pages = List.from(_commonPages);
         _titles = List.from(_commonTitles);
 
         if (isAdmin) {
           _pages.add(AdminPanelScreen()); // Add Admin Panel
           _titles.add('Admin Panel');
+        }
+
+        if (isTeacher) {
+          _pages.add(TeacherScreen()); // Add Teacher Screen
+          _titles.add('Teacher Section');
         }
       });
     }
@@ -78,7 +85,6 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // AppBar with dynamic titles based on the selected page
       appBar: AppBar(
         title: Text(
           _titles.isNotEmpty ? _titles[_selectedIndex] : '',
@@ -95,7 +101,6 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
-          // Notifications Button with Badge
           IconButton(
             icon: Stack(
               children: [
@@ -103,7 +108,7 @@ class _HomePageState extends State<HomePage> {
                 Positioned(
                   right: 0,
                   top: 0,
-                  child: _buildNotificationBadge(), // Display unread count badge
+                  child: _buildNotificationBadge(),
                 ),
               ],
             ),
@@ -114,11 +119,9 @@ class _HomePageState extends State<HomePage> {
           SizedBox(width: 10),
         ],
       ),
-
-      // PageView for smooth transitions
       body: PageView(
         controller: _pageController,
-        physics: NeverScrollableScrollPhysics(), // Disable swipe gestures
+        physics: NeverScrollableScrollPhysics(),
         children: _pages,
         onPageChanged: (index) {
           setState(() {
@@ -126,8 +129,6 @@ class _HomePageState extends State<HomePage> {
           });
         },
       ),
-
-      // Bottom Navigation Bar with modern styling
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -154,7 +155,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Build BottomNavigationBar items dynamically based on admin role
+  /// Build BottomNavigationBar items dynamically based on roles
   List<BottomNavigationBarItem> _buildBottomNavigationBarItems() {
     final List<BottomNavigationBarItem> items = [
       BottomNavigationBarItem(
@@ -184,6 +185,16 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
+    if (isTeacher) {
+      items.add(
+        BottomNavigationBarItem(
+          icon: Icon(Icons.school_outlined), // Use a school icon for teachers
+          activeIcon: Icon(Icons.school),
+          label: 'Teacher',
+        ),
+      );
+    }
+
     return items;
   }
 
@@ -191,11 +202,10 @@ class _HomePageState extends State<HomePage> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('notifications')
-          .where('isRead', isEqualTo: false) // Only count unread notifications
+          .where('isRead', isEqualTo: false)
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return Container();
-
         return Container(
           padding: EdgeInsets.all(5),
           decoration: BoxDecoration(
@@ -203,7 +213,7 @@ class _HomePageState extends State<HomePage> {
             shape: BoxShape.circle,
           ),
           child: Text(
-            snapshot.data!.docs.length.toString(), // Show unread count
+            snapshot.data!.docs.length.toString(),
             style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
           ),
         );

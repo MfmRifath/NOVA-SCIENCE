@@ -42,7 +42,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _phoneController.text = currentUser!.phoneNumber ?? '';
         _locationController.text = currentUser!.location ?? '';
         _bioController.text = currentUser!.bio ?? '';
-        _birthday = (currentUser!.birthday != null) as DateTime?;
+        _birthday = currentUser!.birthday;
       });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(

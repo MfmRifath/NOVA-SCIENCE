@@ -43,56 +43,49 @@ class _CourseScreenState extends State<CourseScreen>
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _initializeCourse();
   }
 
-  /// Initializes course data, enrollment status, and Admin status.
   Future<void> _initializeCourse() async {
     try {
-      final courseProvider =
-      Provider.of<CourseProvider>(context, listen: false);
+      final authProvider = Provider.of<AuthService>(context, listen: false);
+      final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+
+      // Fetch Course Details
       _course = await courseProvider.getCourseById(widget.courseId);
 
-      final authProvider =
-      Provider.of<AuthService>(context, listen: false);
-      final CustomUser? currentUser = await authProvider.getCurrentUser();
+      // Fetch Current User
+      CustomUser? currentUser = await authProvider.getCurrentUser();
+      if (_course != null && currentUser != null) {
+        // Check Enrollment
+        isEnrolled = (currentUser.enrollments as List?)?.any((enrollment) {
+          return enrollment.courseId == _course!.id;
+        }) ?? false;
 
-      if (currentUser != null && _course != null) {
-        // Check if the user is enrolled in the course
-        isEnrolled = currentUser.enrollments?.contains(_course!.id) ?? false;
-        // Check if the user is an Admin
+        // Check Admin Status
         isAdmin = currentUser.role == 'Admin';
       }
 
-      // Initialize TabController based on enrollment or Admin status
+      // Update TabController based on access level
       _tabController = TabController(
         length: (isEnrolled || isAdmin) ? 3 : 2,
         vsync: this,
       );
 
-      // Initialize YoutubePlayerController if enrolled/Admin and has videos
-      if ((isEnrolled || isAdmin) &&
-          _course!.sections.isNotEmpty &&
-          _course!.sections.first.videos.isNotEmpty) {
-        _initializeYoutubePlayer(
-            _course!.sections.first.videos.first.videoUrl);
-      }
-
       setState(() {
         isLoading = false;
-        isCheckingEnrollment = false;
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Failed to load course data: $e'),
-        duration: Duration(seconds: 3),
-      ));
       setState(() {
         isLoading = false;
-        isCheckingEnrollment = false;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load course data: $e')),
+      );
     }
   }
+
 
   /// Deletes a specific video from a course section.
   void _deleteVideo(String courseId, String sectionTitle, int videoIndex) async {
@@ -2047,16 +2040,10 @@ class _CourseScreenState extends State<CourseScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading || isCheckingEnrollment) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Course Details')),
-        body: Center(
-            child: SpinKitDoubleBounce(
-              color: Colors.blueAccent,
-            )),
-      );
-    }
 
+if(_course == null) {
+  return SafeArea(child: SpinKitDoubleBounce(color: Colors.lightBlue,));
+}
     return SafeArea(
       child: YoutubePlayerBuilder(
         player: YoutubePlayer(
@@ -2128,9 +2115,7 @@ class _CourseScreenState extends State<CourseScreen>
                       child: player,
                     ),
                   )
-                else if (!isEnrolled && !isAdmin &&
-                    _course!.sections.isNotEmpty &&
-                    _course!.sections.first.videos.isNotEmpty)
+                else if (_course!.sections.first.videos.isNotEmpty)
                 // Show only first video for all users
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16.0),
