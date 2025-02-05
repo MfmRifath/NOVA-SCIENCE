@@ -28,9 +28,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _loadUserData();
   }
-
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadUserData(); // ✅ Access context safely here
+  }
   Future<void> _loadUserData() async {
     AuthService authService = Provider.of<AuthService>(context, listen: false);
     CustomUser? fetchedUser = await authService.getCurrentUser();
@@ -38,24 +41,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (fetchedUser != null) {
       setState(() {
         currentUser = fetchedUser;
-        _nameController.text = currentUser!.name ?? '';
+        _nameController.text = currentUser!.name ?? ''; // ✅ Ensure name is assigned
         _phoneController.text = currentUser!.phoneNumber ?? '';
         _locationController.text = currentUser!.location ?? '';
         _bioController.text = currentUser!.bio ?? '';
         _birthday = currentUser!.birthday;
       });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to load user data.'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
   Future<void> _pickImage() async {
@@ -79,28 +71,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _updateProfile() async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isUpdating = true;
-      });
+      setState(() { _isUpdating = true; });
 
       AuthService authService = Provider.of<AuthService>(context, listen: false);
       CustomUser? user = currentUser;
 
       if (user == null) {
-        setState(() {
-          _isUpdating = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No user data found.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() { _isUpdating = false; });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('No user data found.'),
+          backgroundColor: Colors.red,
+        ));
         return;
       }
 
       Map<String, dynamic> updatedData = {
-        'name': _nameController.text.trim(),
+        'name': _nameController.text.trim(), // ✅ Ensure name is being updated
         'phoneNumber': _phoneController.text.trim(),
         'location': _locationController.text.trim(),
         'bio': _bioController.text.trim(),
@@ -108,37 +94,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       };
 
       try {
-        await authService.updateUser(
-          updatedData: updatedData,
-          newProfileImage: _profileImage,
-        );
+        await authService.updateUser(updatedData: updatedData, newProfileImage: _profileImage);
+        setState(() { _isUpdating = false; });
 
-        setState(() {
-          _isUpdating = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Profile updated successfully!'),
+          backgroundColor: Colors.green,
+        ));
 
         Navigator.pop(context);
       } catch (e) {
-        setState(() {
-          _isUpdating = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update profile.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() { _isUpdating = false; });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to update profile.'),
+          backgroundColor: Colors.red,
+        ));
       }
     }
   }
-
   Future<void> _selectBirthday() async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -155,11 +128,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        body: Center(child: LoadingSpinner()),
-      );
-    }
 
     return Scaffold(
       appBar: _buildAppBar(),
@@ -269,7 +237,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _buildTextField(
           controller: _nameController,
           label: 'Full Name',
-          icon: FeatherIcons.user,
+          icon: FeatherIcons.framer,
+
         ),
         SizedBox(height: 20),
         _buildTextField(

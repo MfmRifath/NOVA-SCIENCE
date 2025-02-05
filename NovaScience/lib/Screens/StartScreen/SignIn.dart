@@ -180,7 +180,7 @@ class _SignInScreenState extends State<SignInScreen> {
                               child: TextButton(
                                 onPressed: () {
                                   // Implement Forgot Password functionality
-                                  Navigator.pushNamed(context, '/forgotPasswordScreen');
+                                  Navigator.pushNamed(context, '/forgotPassword');
                                 },
                                 child: Text(
                                   'Forgot Password?',
@@ -284,7 +284,7 @@ class _SignInScreenState extends State<SignInScreen> {
         children: [
           Text("Don’t have an Account? ", style: TextStyle(fontSize: 16)),
           TextButton(
-            onPressed: () => Navigator.pushNamed(context, '/signUpScreen'),
+            onPressed: () => Navigator.pushNamed(context, '/signUp'),
             child: Text(
               "Sign Up",
               style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold),

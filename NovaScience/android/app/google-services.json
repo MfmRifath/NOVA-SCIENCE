@@ -12,7 +12,20 @@
           "package_name": "com.NovaScience.nova_science"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "118096250417-3asdl8pc1h9guik9cvldpkh57ljart0t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.NovaScience.nova_science",
+            "certificate_hash": "f8d736bdb753826ab5ca6da7d867f4757c3ff7ca"
+          }
+        },
+        {
+          "client_id": "118096250417-r5lmbm7gudm74tdkoutdl9ddqoi4o4fn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDfFK6mjHHGxmPyYfGq2srARJXgI5fPkz8"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "118096250417-r5lmbm7gudm74tdkoutdl9ddqoi4o4fn.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

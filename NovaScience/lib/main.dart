@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:nova_science/Screens/AdminPanal/EnrollUsersScreen.dart';
 import 'package:nova_science/Screens/AdminPanal/ManageAdvertisementsScreen.dart';
+import 'package:nova_science/Screens/StartScreen/ForgertPasswordScreen.dart';
 import 'package:nova_science/Screens/StartScreen/HomeScreen.dart';
 import 'package:nova_science/Screens/StartScreen/NotificationScreen.dart';
 import 'package:nova_science/Screens/StartScreen/ProfileScreen.dart';
@@ -72,6 +73,8 @@ class Routes {
   static const String enrollUsersScreen = '/enrollUsers';
   static const String notifications = '/notifications';
   static const String manageAdvertisements = '/manageAdvertisements';
+  static const String forgetPassword = '/forgotPassword';
+
 }
 
 class NovaScience extends StatelessWidget {
@@ -139,6 +142,9 @@ class NovaScience extends StatelessWidget {
             builder = (context) => ManageAdvertisementsScreen();
             break;
            // Optional: break here for clarity
+          case Routes.forgetPassword :
+            builder = (context) => ForgotPasswordScreen();
+            break;
         }
         return MaterialPageRoute(builder: builder);
       },
