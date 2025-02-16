@@ -9,6 +9,7 @@ class Course {
   double? price;
   String? subject;
   String? imageUrl;
+  String? medium;
   String? status;
   String? duration;
   String? instructor;
@@ -17,6 +18,7 @@ class Course {
   List<Section> sections;
   List<FeedBack> feedbacks;
   String? instructorEmail;
+  bool? isApproved;
 
   Course({
     this.id,
@@ -32,7 +34,9 @@ class Course {
     this.status,
     this.sections = const [],
     this.feedbacks = const [],
-    this.instructorEmail
+    this.instructorEmail,
+    this.isApproved,
+    this.medium,
   });
 
   factory Course.fromMap(Map<String, dynamic> data, String documentId) {
@@ -44,6 +48,7 @@ class Course {
       imageUrl: data['imageUrl'],
       subject: data['subject'],
       duration: data['duration'],
+      medium: data['medium'],
       instructorEmail: data['instructorEmail'],
       status: data['status'],
       instructor: data['instructor'],
@@ -57,6 +62,7 @@ class Course {
           ?.map((fb) => FeedBack.fromMap(fb))
           .toList() ??
           [],
+      isApproved: data['isApproved'] ?? false,
     );
   }
 
@@ -69,12 +75,14 @@ class Course {
       'duration': duration,
       'instructor': instructor,
       'averageRating': averageRating,
-      'status':status,
+      'status': status,
       'imageUrl': imageUrl,
-      'instructorEmail':instructorEmail,
+      'instructorEmail': instructorEmail,
       'enrolledUserIds': enrolledUserIds ?? [],
       'sections': sections.map((s) => s.toMap()).toList(),
       'feedbacks': feedbacks.map((fb) => fb.toMap()).toList(),
+      'isApproved': isApproved,
+      'medium':medium
     };
   }
 }
@@ -82,14 +90,23 @@ class Course {
 class Section {
   String? sectionTitle;
   List<Video> videos;
+  List<PdfResource> pdfs;
 
-  Section({this.sectionTitle, this.videos = const []});
+  Section({
+    this.sectionTitle,
+    this.videos = const [],
+    this.pdfs = const [],
+  });
 
   factory Section.fromMap(Map<String, dynamic> data) {
     return Section(
       sectionTitle: data['sectionTitle'],
       videos: (data['videos'] as List<dynamic>?)
           ?.map((video) => Video.fromMap(video))
+          .toList() ??
+          [],
+      pdfs: (data['pdfs'] as List<dynamic>?)
+          ?.map((pdf) => PdfResource.fromMap(pdf))
           .toList() ??
           [],
     );
@@ -99,6 +116,7 @@ class Section {
     return {
       'sectionTitle': sectionTitle,
       'videos': videos.map((v) => v.toMap()).toList(),
+      'pdfs': pdfs.map((p) => p.toMap()).toList(),
     };
   }
 }
@@ -120,6 +138,27 @@ class Video {
     return {
       'title': title,
       'videoUrl': videoUrl,
+    };
+  }
+}
+
+class PdfResource {
+  String? title;
+  String? pdfUrl;
+
+  PdfResource({this.title, this.pdfUrl});
+
+  factory PdfResource.fromMap(Map<String, dynamic> data) {
+    return PdfResource(
+      title: data['title'],
+      pdfUrl: data['pdfUrl'],
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'pdfUrl': pdfUrl,
     };
   }
 }

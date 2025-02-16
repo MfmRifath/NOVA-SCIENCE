@@ -1,6 +1,4 @@
-// HomeScreen.dart
 import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -15,7 +13,6 @@ import '../../Service/AdvertisementProvider.dart';
 import '../../Service/AuthService.dart';
 import '../../Service/CourseProvider.dart';
 import '../AdvertisementCarousel.dart';
-
 import 'CourseCard.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -23,13 +20,22 @@ class HomeScreen extends StatefulWidget {
   _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  final RefreshController _refreshController = RefreshController(initialRefresh: false);
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  final RefreshController _refreshController =
+  RefreshController(initialRefresh: false);
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
   String _searchQuery = '';
   bool isAdmin = false;
   AuthService authService = AuthService();
+  String _selectedMedium = "All";
+  final List<String> _mediumOptions = ["All", "Tamil", "English", "Sinhala"];
+
+  // Custom Colors
+  final Color greenColor = const Color(0xFF11261f);
+  final Color yellowColor = const Color(0xFF123755);
+  final Color maroonColor = const Color(0xFF722626);
+
   @override
   void initState() {
     super.initState();
@@ -37,9 +43,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _searchController.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<CourseProvider>(context, listen: false).fetchCourses();
-      Provider.of<AdvertisementProvider>(context, listen: false).fetchAdvertisements();
+      Provider.of<AdvertisementProvider>(context, listen: false)
+          .fetchAdvertisements();
     });
-    String userId = authService.currentUser!.uid; // Replace with your user logic
+    String userId = authService.currentUser!.uid;
     authService.checkAndUnenrollExpiredCourses(userId);
   }
 
@@ -55,28 +62,62 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<List<QueryDocumentSnapshot<Object?>>> _getFilteredCourses(Future<List<QueryDocumentSnapshot<Object?>>?>? futureCourses) async {
-    final courses = await futureCourses?.then((value) => value ?? <QueryDocumentSnapshot<Object?>>[]) ?? <QueryDocumentSnapshot<Object?>>[];
-    if (_searchQuery.isEmpty) {
-      return courses;
-    } else {
-      return courses.where((course) {
+  Future<List<QueryDocumentSnapshot<Object?>>> _getFilteredCourses(
+      Future<List<QueryDocumentSnapshot<Object?>>?>? futureCourses) async {
+    final courses = await futureCourses
+        ?.then((value) => value ?? <QueryDocumentSnapshot<Object?>>[])
+        ?? <QueryDocumentSnapshot<Object?>>[];
+
+    // Filter approved courses
+    final approvedCourses = courses.where((course) {
+      final data = course.data() as Map<String, dynamic>?;
+      return data?['isApproved'] == true;
+    }).toList();
+
+    // Debug logging
+    approvedCourses.forEach((course) {
+      final data = course.data() as Map<String, dynamic>?;
+      print("Approved course: ${data?['courseTitle']} - Medium: ${data?['medium']}");
+    });
+
+    // Filter by search query
+    List<QueryDocumentSnapshot<Object?>> filtered = _searchQuery.isEmpty
+        ? approvedCourses
+        : approvedCourses.where((course) {
+      final data = course.data() as Map<String, dynamic>?;
+      final title = data?['courseTitle']?.toString().toLowerCase() ?? '';
+      final instructor =
+          data?['instructor']?.toString().toLowerCase() ?? '';
+      final subject = data?['subject']?.toString().toLowerCase() ?? '';
+      return title.contains(_searchQuery) ||
+          instructor.contains(_searchQuery) ||
+          subject.contains(_searchQuery);
+    }).toList();
+
+    // Filter by medium if not "All"
+    if (_selectedMedium != "All") {
+      filtered = filtered.where((course) {
         final data = course.data() as Map<String, dynamic>?;
-        final title = data?['courseTitle']?.toString().toLowerCase() ?? '';
-        final instructor = data?['instructor']?.toString().toLowerCase() ?? '';
-        final subject = data?['subject']?.toString().toLowerCase() ?? '';
-        return title.contains(_searchQuery) || instructor.contains(_searchQuery) || subject.contains(_searchQuery);
+        final medium = data?['medium']?.toString().trim() ?? '';
+        print("Filtering course: ${data?['courseTitle']} - Medium: $medium against $_selectedMedium");
+        if (medium.isEmpty) return false;
+        return medium.toLowerCase() == _selectedMedium.toLowerCase();
       }).toList();
     }
+
+    return filtered;
   }
 
   Future<void> _checkAdminStatus() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       setState(() {
         isAdmin = userDoc.data()?['role'] == 'Admin';
-        print("Admin Status: $isAdmin"); // Debug Statement
+        print("Admin Status: $isAdmin");
       });
     } else {
       setState(() {
@@ -95,20 +136,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _onRefresh() async {
     await Provider.of<CourseProvider>(context, listen: false).fetchCourses();
-    await Provider.of<AdvertisementProvider>(context, listen: false).fetchAdvertisements();
+    await Provider.of<AdvertisementProvider>(context, listen: false)
+        .fetchAdvertisements();
     _refreshController.refreshCompleted();
-    print("Data Refreshed"); // Debug Statement
+    print("Data Refreshed");
   }
-
 
   @override
   Widget build(BuildContext context) {
     final courseProvider = Provider.of<CourseProvider>(context);
-    final advertisementProvider = Provider.of<AdvertisementProvider>(context);
+    final advertisementProvider =
+    Provider.of<AdvertisementProvider>(context);
     final isLoading = courseProvider.isLoading;
     final hasError = courseProvider.hasError;
 
-    print("HomeScreen Build: isLoading=$isLoading, hasError=$hasError"); // Debug Statement
+    print("HomeScreen Build: isLoading=$isLoading, hasError=$hasError");
 
     return Scaffold(
       floatingActionButton: isAdmin
@@ -119,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
         child: Icon(Icons.add),
-        backgroundColor: Colors.blueAccent,
+        backgroundColor: maroonColor,
         tooltip: 'Add Course',
       )
           : null,
@@ -129,25 +171,25 @@ class _HomeScreenState extends State<HomeScreen> {
           SafeArea(
             child: LiquidPullToRefresh(
               onRefresh: _onRefresh,
-              color: Colors.blueAccent,
+              color: yellowColor,
               height: 150,
               backgroundColor: Colors.white.withOpacity(0.9),
               animSpeedFactor: 2,
               showChildOpacityTransition: false,
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  // Determine breakpoints
+                  // Set grid parameters based on available width
                   double width = constraints.maxWidth;
                   int gridCount;
-                  double padding = 16.0;
-                  double sectionTitleFontSize = 22;
-                  double cardAspectRatio = 0.7;  // Reduced from 0.75
+                  double padding;
+                  double sectionTitleFontSize;
+                  double cardAspectRatio;
 
                   if (width > 1200) {
-                    gridCount = 6;  // Increased number of columns
+                    gridCount = 6;
                     padding = 20.0;
                     sectionTitleFontSize = 24;
-                    cardAspectRatio = 0.65;  // More narrow aspect ratio
+                    cardAspectRatio = 0.65;
                   } else if (width > 1000) {
                     gridCount = 5;
                     padding = 18.0;
@@ -172,13 +214,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   return CustomScrollView(
                     slivers: [
                       SliverPadding(
-                        padding: EdgeInsets.symmetric(horizontal: padding, vertical: 20),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: padding, vertical: 20),
                         sliver: SliverList(
                           delegate: SliverChildListDelegate([
-                            _buildSearchBar(),
+                            _buildFilterRow(),
                             SizedBox(height: 30),
                             _buildAdvertisementSection(advertisementProvider),
-                            _buildCourseSections(courseProvider, gridCount, cardAspectRatio, sectionTitleFontSize),
+                            _buildCourseSections(courseProvider, gridCount,
+                                cardAspectRatio, sectionTitleFontSize),
                           ]),
                         ),
                       ),
@@ -193,7 +237,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCourseSections(CourseProvider courseProvider, int gridCount, double aspectRatio, double fontSize) {
+  Widget _buildCourseSections(CourseProvider courseProvider, int gridCount,
+      double aspectRatio, double fontSize) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -203,7 +248,6 @@ class _HomeScreenState extends State<HomeScreen> {
         _buildCoursesGrid(courseProvider.getFreeCourses(), gridCount, aspectRatio),
         _buildSectionHeader("Premium Courses", Icons.workspace_premium, fontSize),
         _buildCoursesGrid(courseProvider.getPremiumCourses(), gridCount, aspectRatio),
-
       ],
     );
   }
@@ -232,37 +276,65 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSearchBar() {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: 8),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: Colors.grey.shade300),
       ),
       child: TextField(
         controller: _searchController,
         decoration: InputDecoration(
-          filled: true,
-          fillColor: Colors.white,
           hintText: 'Search courses...',
-          prefixIcon: Icon(Icons.search_rounded, color: Colors.blueAccent),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: yellowColor,
+          ),
           suffixIcon: IconButton(
             icon: Icon(Icons.clear_rounded),
             onPressed: () => _searchController.clear(),
           ),
-          contentPadding: EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: BorderSide(color: Colors.blueAccent, width: 1.5),
-          ),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(vertical: 12),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFilterRow() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(child: _buildSearchBar()),
+          SizedBox(width: 8),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedMedium,
+                items: _mediumOptions.map((medium) {
+                  return DropdownMenuItem<String>(
+                    value: medium,
+                    child: Text(medium),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _selectedMedium = value;
+                    });
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -270,8 +342,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCoursesGrid(
       Future<List<QueryDocumentSnapshot<Object?>>?>? futureCourses,
       int gridCount,
-      double aspectRatio,
-      ) {
+      double aspectRatio) {
     return FutureBuilder<List<QueryDocumentSnapshot<Object?>>>(
       future: _getFilteredCourses(futureCourses),
       builder: (context, snapshot) {
@@ -289,8 +360,8 @@ class _HomeScreenState extends State<HomeScreen> {
             itemCount: snapshot.data!.length,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: gridCount,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
               childAspectRatio: aspectRatio,
             ),
             itemBuilder: (context, index) {
@@ -384,7 +455,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Update advertisement section
+  // Advertisement Section
   Widget _buildAdvertisementSection(AdvertisementProvider advertisementProvider) {
     if (advertisementProvider.isLoading) {
       return Container(
@@ -408,12 +479,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       height: 180,
       margin: EdgeInsets.only(bottom: 30),
-      child: AdvertisementCarousel(advertisements: advertisementProvider.advertisements),
+      child: AdvertisementCarousel(
+          advertisements: advertisementProvider.advertisements),
     );
   }
 
-  // Update My Courses section
-  Widget _buildMyCoursesSection(CourseProvider courseProvider, int gridCount, double aspectRatio) {
+  // My Courses Section
+  Widget _buildMyCoursesSection(
+      CourseProvider courseProvider, int gridCount, double aspectRatio) {
     final user = FirebaseAuth.instance.currentUser;
 
     return FutureBuilder<List<QueryDocumentSnapshot<Object?>>?>(
@@ -430,7 +503,9 @@ class _HomeScreenState extends State<HomeScreen> {
           return _buildShimmerGrid(gridCount);
         }
 
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+        if (snapshot.hasError ||
+            !snapshot.hasData ||
+            snapshot.data!.isEmpty) {
           return _buildEmptyState(
             Icons.menu_book_rounded,
             "Start your learning journey!\nExplore our courses",
@@ -441,14 +516,15 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
   }
+
   Widget _buildBackground() {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Colors.blue.shade800,
-            Colors.blue.shade400,
-            Colors.purple.shade300,
+            greenColor,
+            yellowColor,
+            maroonColor,
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,

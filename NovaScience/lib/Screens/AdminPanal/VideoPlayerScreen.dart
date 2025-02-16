@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
-  final String videoUrl;
+  final String videoUrl;  // You pass the videoUrl, not the videoId
 
   const VideoPlayerScreen({Key? key, required this.videoUrl}) : super(key: key);
 
@@ -59,18 +59,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           controller: _controller,
           showVideoProgressIndicator: true,
           onReady: () {
-            // You can perform additional actions when the player is ready
             print('Player is ready.');
           },
           onEnded: (metadata) {
-            // Actions to perform when the video ends
             print('Video has ended.');
           },
         ),
         builder: (context, player) {
-          return Center(
-            child: player,
-          );
+          return Center(child: player);
         },
       ),
     );

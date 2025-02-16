@@ -2,10 +2,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:nova_science/Service/AuthService.dart';
+import 'package:intl/intl.dart'; // For date formatting
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Modals/User.dart';
+import '../../Service/AuthService.dart';
 
 class EditProfileScreen extends StatefulWidget {
   @override
@@ -14,6 +15,8 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  // Controllers for form fields
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
@@ -29,11 +32,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void initState() {
     super.initState();
   }
+
+  // Use didChangeDependencies to safely access the context.
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _loadUserData(); // ✅ Access context safely here
+    _loadUserData();
   }
+
+  // Load user data once and update the text controllers.
   Future<void> _loadUserData() async {
     AuthService authService = Provider.of<AuthService>(context, listen: false);
     CustomUser? fetchedUser = await authService.getCurrentUser();
@@ -41,15 +48,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (fetchedUser != null) {
       setState(() {
         currentUser = fetchedUser;
-        _nameController.text = currentUser!.name ?? ''; // ✅ Ensure name is assigned
+        _nameController.text = currentUser!.name ?? '';
         _phoneController.text = currentUser!.phoneNumber ?? '';
         _locationController.text = currentUser!.location ?? '';
         _bioController.text = currentUser!.bio ?? '';
         _birthday = currentUser!.birthday;
       });
     }
+    setState(() {
+      _isLoading = false;
+    });
   }
 
+  // Pick a new profile image from the gallery.
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     try {
@@ -71,22 +82,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _updateProfile() async {
     if (_formKey.currentState!.validate()) {
-      setState(() { _isUpdating = true; });
+      setState(() {
+        _isUpdating = true;
+      });
 
       AuthService authService = Provider.of<AuthService>(context, listen: false);
       CustomUser? user = currentUser;
 
       if (user == null) {
-        setState(() { _isUpdating = false; });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('No user data found.'),
-          backgroundColor: Colors.red,
-        ));
+        setState(() {
+          _isUpdating = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('No user data found.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
         return;
       }
 
       Map<String, dynamic> updatedData = {
-        'name': _nameController.text.trim(), // ✅ Ensure name is being updated
+        'name': _nameController.text.trim(),
         'phoneNumber': _phoneController.text.trim(),
         'location': _locationController.text.trim(),
         'bio': _bioController.text.trim(),
@@ -94,24 +113,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       };
 
       try {
-        await authService.updateUser(updatedData: updatedData, newProfileImage: _profileImage);
-        setState(() { _isUpdating = false; });
+        await authService.updateUser(
+          updatedData: updatedData,
+          newProfileImage: _profileImage,
+        );
 
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Profile updated successfully!'),
-          backgroundColor: Colors.green,
-        ));
+        if (!mounted) return;
+        setState(() {
+          _isUpdating = false;
+        });
 
-        Navigator.pop(context);
+        // Show the success SnackBar using the current context.
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Profile updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Delay navigation briefly to allow the SnackBar to display.
+        Future.delayed(Duration(milliseconds: 500), () {
+          if (mounted) {
+            Navigator.pop(context);
+          }
+        });
       } catch (e) {
-        setState(() { _isUpdating = false; });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to update profile.'),
-          backgroundColor: Colors.red,
-        ));
+        if (!mounted) return;
+        setState(() {
+          _isUpdating = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update profile.'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
+  // Allow user to select a birthday using the date picker.
   Future<void> _selectBirthday() async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -128,49 +168,71 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-
-    return Scaffold(
-      appBar: _buildAppBar(),
-      body: SingleChildScrollView(
-        physics: BouncingScrollPhysics(),
-        padding: EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              _buildProfileImageSection(),
-              SizedBox(height: 32),
-              _buildFormFields(),
-              SizedBox(height: 24),
-              _buildBirthdayPicker(),
-              SizedBox(height: 32),
-              _buildSaveButton(),
-            ],
+    // Show a loader until the user data is fetched.
+    if (_isLoading) {
+      return Scaffold(
+        appBar: _buildAppBar(),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    // Wrap with GestureDetector to dismiss keyboard on tap outside.
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: Colors.grey.shade100,
+        appBar: _buildAppBar(),
+        body: SingleChildScrollView(
+          physics: BouncingScrollPhysics(),
+          padding: EdgeInsets.all(24),
+          child: Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    _buildProfileImageSection(),
+                    SizedBox(height: 24),
+                    _buildFormFields(),
+                    SizedBox(height: 24),
+                    _buildBirthdayPicker(),
+                    SizedBox(height: 24),
+                    _buildSaveButton(),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
+  // Custom AppBar with a rounded bottom.
   AppBar _buildAppBar() {
     return AppBar(
-      title: Text('Edit Profile',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade800,
-          )),
+      title: Text(
+        'Edit Profile',
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Colors.grey.shade800,
+        ),
+      ),
       backgroundColor: Colors.white,
-      elevation: 1,
+      elevation: 2,
       iconTheme: IconThemeData(color: Colors.grey.shade700),
       centerTitle: true,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(16),
-        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
       ),
     );
   }
 
+  // Profile image section with a circular image and camera icon overlay.
   Widget _buildProfileImageSection() {
     return Stack(
       alignment: Alignment.center,
@@ -185,18 +247,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 color: Colors.blue.shade100.withOpacity(0.4),
                 blurRadius: 20,
                 spreadRadius: 4,
-              )
+              ),
             ],
           ),
           child: ClipOval(
             child: _profileImage != null
-                ? Image.file(_profileImage!, fit: BoxFit.cover)
+                ? Image.file(
+              _profileImage!,
+              fit: BoxFit.cover,
+            )
                 : Image.network(
-              currentUser!.profileImageUrl ?? 'https://via.placeholder.com/150',
+              currentUser?.profileImageUrl ??
+                  'https://via.placeholder.com/150',
               fit: BoxFit.cover,
               loadingBuilder: (context, child, loadingProgress) {
                 if (loadingProgress == null) return child;
-                return LoadingSpinner();
+                return Center(child: CircularProgressIndicator());
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Image.asset(
+                  'assets/images/logo.png',
+                  fit: BoxFit.cover,
+                );
               },
             ),
           ),
@@ -216,7 +288,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     color: Colors.black12,
                     blurRadius: 8,
                     offset: Offset(0, 4),
-                  )
+                  ),
                 ],
               ),
               child: Icon(
@@ -231,29 +303,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
+  // Build form fields for full name, phone number, location, and bio.
   Widget _buildFormFields() {
     return Column(
       children: [
         _buildTextField(
           controller: _nameController,
           label: 'Full Name',
-          icon: FeatherIcons.framer,
-
+          icon: FeatherIcons.user,
         ),
-        SizedBox(height: 20),
+        SizedBox(height: 16),
         _buildTextField(
           controller: _phoneController,
           label: 'Phone Number',
           icon: FeatherIcons.phone,
           keyboardType: TextInputType.phone,
         ),
-        SizedBox(height: 20),
+        SizedBox(height: 16),
         _buildTextField(
           controller: _locationController,
           label: 'Location',
           icon: FeatherIcons.mapPin,
         ),
-        SizedBox(height: 20),
+        SizedBox(height: 16),
         _buildTextField(
           controller: _bioController,
           label: 'Bio',
@@ -264,6 +336,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
+  // Reusable text field widget with enhanced decoration.
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
@@ -273,13 +346,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }) {
     return TextFormField(
       controller: controller,
+      enabled: true,
       style: TextStyle(color: Colors.grey.shade800),
       decoration: InputDecoration(
-        prefixIcon: Container(
-          width: 50,
-          alignment: Alignment.center,
-          child: Icon(icon, size: 20, color: Colors.blue.shade600),
-        ),
+        prefixIcon: Icon(icon, color: Colors.blue.shade600),
         labelText: label,
         labelStyle: TextStyle(color: Colors.grey.shade600),
         floatingLabelStyle: TextStyle(color: Colors.blue.shade600),
@@ -303,6 +373,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
+  // Birthday picker field with formatted date.
   Widget _buildBirthdayPicker() {
     return GestureDetector(
       onTap: _selectBirthday,
@@ -319,7 +390,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             SizedBox(width: 16),
             Text(
               _birthday != null
-                  ? "${_birthday!.toLocal()}".split(' ')[0]
+                  ? DateFormat('dd MMM yyyy').format(_birthday!)
                   : "Select your birthday",
               style: TextStyle(
                 color: _birthday != null
@@ -334,6 +405,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
+  // Save button with a loading spinner when updating.
   Widget _buildSaveButton() {
     return SizedBox(
       width: double.infinity,
@@ -365,12 +437,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 }
 
-
+// A simple adaptive loading spinner widget.
 class LoadingSpinner extends StatelessWidget {
   final Color? color;
-
   const LoadingSpinner({this.color});
-
   @override
   Widget build(BuildContext context) {
     return Center(

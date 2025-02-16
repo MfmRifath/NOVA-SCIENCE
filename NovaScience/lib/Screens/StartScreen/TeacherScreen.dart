@@ -26,6 +26,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
   final TextEditingController _durationController = TextEditingController();
   final TextEditingController _subjectController = TextEditingController();
   final TextEditingController _instructorController = TextEditingController();
+  final TextEditingController _mediumController = TextEditingController();
 
   // Image picker
   final ImagePicker _picker = ImagePicker();
@@ -34,7 +35,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
   // Currently editing course
   String? _currentCourseId;
   String? _currentImageUrl;
-
+  String? _selectedMedium;
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context, listen: false);
@@ -231,6 +232,8 @@ class _TeacherScreenState extends State<TeacherScreen> {
                 _buildTextField(
                     _subjectController, 'Subject', Icons.subject),
                 SizedBox(height: 20),
+                _buildMediumDropdown(),
+                SizedBox(height: 20),
 
                 // ======== SUBMIT BUTTON ========
                 Center(
@@ -238,12 +241,10 @@ class _TeacherScreenState extends State<TeacherScreen> {
                     onPressed: () async {
                       if (_formKey.currentState!.validate()) {
                         // 1. Get instructor email
-                        String? instructorEmail =
-                        await authService.getCurrentUserEmail();
+                        String? instructorEmail = await authService.getCurrentUserEmail();
                         if (instructorEmail == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                                content: Text('Error: Instructor email not found')),
+                            SnackBar(content: Text('Error: Instructor email not found')),
                           );
                           return;
                         }
@@ -255,7 +256,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
                         // 3. Upload image if available
                         String? imageUrl = await _uploadCourseImage(courseId);
 
-                        // 4. Create or update course
+                        // 4. Create or update course with selected medium
                         if (_currentCourseId == null) {
                           await courseProvider.addCourse(
                             title: _titleController.text,
@@ -267,6 +268,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
                             status: 'Premium',
                             instructorEmail: instructorEmail,
                             imageUrl: imageUrl,
+                            medium: _selectedMedium, // Pass the selected medium here
                           );
                         } else {
                           await courseProvider.editCourse(
@@ -276,6 +278,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
                             double.tryParse(_priceController.text),
                             _subjectController.text,
                             imageUrl ?? _currentImageUrl!,
+                            _selectedMedium!, // Pass the selected medium here
                           );
                         }
 
@@ -365,7 +368,42 @@ class _TeacherScreenState extends State<TeacherScreen> {
       validator: (value) => value!.isEmpty ? '$label is required' : null,
     );
   }
-
+  Widget _buildMediumDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedMedium,
+      decoration: InputDecoration(
+        labelText: 'Medium',
+        prefixIcon: Icon(Icons.density_medium),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.blue.shade300, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.blue.shade600, width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.grey.shade100,
+        contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      ),
+      items: ['Tamil', 'English', 'Sinhala']
+          .map((medium) => DropdownMenuItem(
+        value: medium,
+        child: Text(medium),
+      ))
+          .toList(),
+      onChanged: (value) {
+        setState(() {
+          _selectedMedium = value;
+        });
+      },
+      validator: (value) =>
+      value == null || value.isEmpty ? 'Please select a medium' : null,
+    );
+  }
   /// Builds the image picker widget (tap to pick or change an image).
   Widget _buildImagePicker(BuildContext context) {
     return InkWell(
@@ -615,12 +653,12 @@ class _TeacherScreenState extends State<TeacherScreen> {
       _courseImage = null;
       _currentCourseId = null;
       _currentImageUrl = null;
+      _selectedMedium = null; // Reset the dropdown
     });
   }
 
   /// Edits an existing course by populating the form with existing info.
-  void _editCourse(
-      BuildContext context, Map course, CourseProvider courseProvider) {
+  void _editCourse(BuildContext context, Map course, CourseProvider courseProvider) {
     setState(() {
       _currentCourseId = course['id'];
       _titleController.text = course['courseTitle'];
@@ -631,6 +669,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
       _instructorController.text = course['instructor'];
       _currentImageUrl = course['imageUrl'];
       _courseImage = null; // Reset any currently picked image
+      _selectedMedium = course['medium']; // Set the medium from the course data
     });
 
     // Animate to the form so the user can see it

@@ -65,6 +65,8 @@ dependencies:
   liquid_pull_to_refresh: ^3.0.1
   flutter_feather_icons: ^2.0.0+1
   flutter_animate: ^4.5.2
+  flutter_cached_pdfview: ^0.4.3
+  file_picker: ^8.3.1
 
 dev_dependencies:
   flutter_test:

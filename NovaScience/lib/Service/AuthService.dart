@@ -174,18 +174,14 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Retrieves the current authenticated user's data from Firestore.
   Future<CustomUser?> getCurrentUser() async {
     try {
       User? user = _auth.currentUser;
-
       if (user != null) {
-        DocumentSnapshot doc =
-        await _firestore.collection('users').doc(user.uid).get();
-
+        DocumentSnapshot doc = await _firestore.collection('users').doc(user.uid).get();
+        print('Fetched document: ${doc.data()}'); // Debug output
         if (doc.exists) {
-          _user = CustomUser.fromMap(
-              doc.data() as Map<String, dynamic>, doc.id);
+          _user = CustomUser.fromMap(doc.data() as Map<String, dynamic>, doc.id);
           notifyListeners();
           return _user;
         }
@@ -196,35 +192,43 @@ class AuthService with ChangeNotifier {
       return null;
     }
   }
-
   /// Updates the user's profile with new data and optionally a new profile image.
   Future<void> updateUser({
     required Map<String, dynamic> updatedData,
     File? newProfileImage,
   }) async {
     User? user = _auth.currentUser;
-    if (user != null) {
-      try {
-        await _firestore.collection('users').doc(user.uid).update(updatedData);
+    if (user == null) return;
 
-        if (newProfileImage != null) {
-          TaskSnapshot uploadTask = await _storage
-              .ref('profile_images/${user.uid}')
-              .putFile(newProfileImage);
-          String newProfileImageUrl = await uploadTask.ref.getDownloadURL();
-          await _firestore.collection('users').doc(user.uid).update({
-            'profileImageUrl': newProfileImageUrl,
-          });
-        }
+    try {
+      // Get a reference to the user's document.
+      DocumentReference userDoc = _firestore.collection('users').doc(user.uid);
 
-        // Refresh local user data
-        await getCurrentUser();
+      // Create a write batch to commit multiple updates atomically.
+      WriteBatch batch = _firestore.batch();
 
-        notifyListeners(); // Notify after updating user
-      } catch (e) {
-        print('Error updating user: $e');
-        // Optionally, handle errors by rethrowing or using another mechanism
+      // Add the updated profile data to the batch.
+      batch.update(userDoc, updatedData);
+
+      // If there is a new profile image, upload it and add its URL update to the batch.
+      if (newProfileImage != null) {
+        TaskSnapshot uploadTask = await _storage.ref('profile_images/${user.uid}').putFile(newProfileImage);
+        String newProfileImageUrl = await uploadTask.ref.getDownloadURL();
+        batch.update(userDoc, {'profileImageUrl': newProfileImageUrl});
       }
+
+      // Commit the batch.
+      await batch.commit();
+
+      // Refresh local user data after update.
+      await getCurrentUser();
+
+      // Notify any listeners of the change.
+      notifyListeners();
+    } catch (e) {
+      print('Error updating user: $e');
+      // Rethrow the error so the caller can handle it if needed.
+      rethrow;
     }
   }
 

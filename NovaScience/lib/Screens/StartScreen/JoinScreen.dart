@@ -18,7 +18,7 @@ class JoinScreen extends StatelessWidget {
           height: double.infinity,
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.blue.shade800, Colors.blue.shade400],
+              colors: [Colors.grey, Colors.white],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -57,7 +57,7 @@ class JoinScreen extends StatelessWidget {
                           tag: 'logo',
                           child: Image.asset(
                             'assets/images/logo.png',
-                            width: screenWidth * 0.5,
+                            width: screenWidth * 0.6,
                             fit: BoxFit.contain,
                           ),
                         ),
@@ -77,12 +77,12 @@ class JoinScreen extends StatelessWidget {
                             from: 60,
                             duration: const Duration(milliseconds: 600),
                             child: Text(
-                              'Welcome to NOVA SCIENCE!',
+                              'Welcome to NOVA LEARN!',
                               textAlign: TextAlign.center,
                               style: GoogleFonts.poppins(
                                 fontSize: 28.0,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                                color: Color(0xff722626),
                               ),
                             ),
                           ),
@@ -92,12 +92,12 @@ class JoinScreen extends StatelessWidget {
                             delay: const Duration(milliseconds: 200),
                             duration: const Duration(milliseconds: 800),
                             child: Text(
-                              'Begin your journey with NOVA SCIENCE and unlock your full potential! Explore A/L Science, O/L Maths, and more with expertly crafted courses.',
+                              'Begin your journey with NOVA LEARN and unlock your full potential! Explore A/L Science, O/L Maths, and more with expertly crafted courses.',
                               textAlign: TextAlign.center,
                               style: GoogleFonts.poppins(
                                 fontSize: 16.0,
                                 fontWeight: FontWeight.w400,
-                                color: Colors.white.withOpacity(0.9),
+                                color: Color(0xff11261f),
                                 height: 1.6,
                               ),
                             ),
@@ -143,7 +143,7 @@ class JoinScreen extends StatelessWidget {
                             delay: const Duration(milliseconds: 1000),
                             child: FadeInUp(
                               child: Text(
-                                '© 2024 NOVA SCIENCE. All Rights Reserved.',
+                                '© 2024 NOVA LEARN. All Rights Reserved.',
                                 style: GoogleFonts.poppins(
                                   fontSize: 12.0,
                                   color: Colors.white.withOpacity(0.7),

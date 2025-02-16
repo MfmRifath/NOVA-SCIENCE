@@ -33,6 +33,11 @@ class _HomePageState extends State<HomePage> {
   List<Widget> _pages = [];
   List<String> _titles = [];
 
+  // Define the new colors
+  final Color greenColor = const Color(0xFF11261f);
+  final Color yellowColor = const Color(0xFF123755);
+  final Color maroonColor = const Color(0xFF722626);
+
   @override
   void initState() {
     super.initState();
@@ -43,10 +48,11 @@ class _HomePageState extends State<HomePage> {
   Future<void> _checkUserRole() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final userDoc =
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       setState(() {
-        isAdmin = userDoc.data()?['role'] == 'Admin'; // Check the role field for Admin
-        isTeacher = userDoc.data()?['role'] == 'Teacher'; // Check the role field for Teacher
+        isAdmin = userDoc.data()?['role'] == 'Admin'; // Check for Admin role
+        isTeacher = userDoc.data()?['role'] == 'Teacher'; // Check for Teacher role
 
         // Update pages and titles dynamically based on roles
         _pages = List.from(_commonPages);
@@ -88,13 +94,18 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: Text(
           _titles.isNotEmpty ? _titles[_selectedIndex] : '',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
         elevation: 0,
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.blueAccent, Colors.lightBlueAccent],
+              // Updated gradient using the new colors
+              colors: [greenColor, yellowColor, maroonColor],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -143,7 +154,8 @@ class _HomePageState extends State<HomePage> {
             backgroundColor: Colors.white,
             currentIndex: _selectedIndex,
             onTap: _onItemTapped,
-            selectedItemColor: Colors.blueAccent,
+            // Updated selected item color using the new color scheme
+            selectedItemColor: maroonColor,
             unselectedItemColor: Colors.grey,
             selectedFontSize: 14,
             unselectedFontSize: 12,
@@ -188,7 +200,7 @@ class _HomePageState extends State<HomePage> {
     if (isTeacher) {
       items.add(
         BottomNavigationBarItem(
-          icon: Icon(Icons.school_outlined), // Use a school icon for teachers
+          icon: Icon(Icons.school_outlined), // Icon for Teacher Screen
           activeIcon: Icon(Icons.school),
           label: 'Teacher',
         ),
@@ -214,7 +226,11 @@ class _HomePageState extends State<HomePage> {
           ),
           child: Text(
             snapshot.data!.docs.length.toString(),
-            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         );
       },

@@ -1,6 +1,12 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:youtube_player_flutter/youtube_player_flutter.dart'; // Import YouTube player package
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_cached_pdfview/flutter_cached_pdfview.dart';
+
 import '../../Modals/CourseAndSectionAndVideos.dart';
 import '../../Service/CourseProvider.dart';
 
@@ -8,9 +14,8 @@ class ManageSectionsScreen extends StatelessWidget {
   final String courseId;
   ManageSectionsScreen({required this.courseId});
 
+  // Controller used only for adding new sections.
   final TextEditingController _sectionTitleController = TextEditingController();
-  final TextEditingController _videoTitleController = TextEditingController();
-  final TextEditingController _videoUrlController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +86,8 @@ class ManageSectionsScreen extends StatelessWidget {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                        padding:
+                        EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -93,9 +99,9 @@ class ManageSectionsScreen extends StatelessWidget {
               ),
             ),
             SizedBox(height: 20),
-            // List of Sections and Videos
+            // List of Sections and Resources
             Expanded(
-              child: FutureBuilder(
+              child: FutureBuilder<Course?>(
                 future: courseProvider.getCourseById(courseId),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -111,7 +117,8 @@ class ManageSectionsScreen extends StatelessWidget {
                         style: TextStyle(color: Colors.red, fontSize: 16),
                       ),
                     );
-                  } else if (!snapshot.hasData || snapshot.data!.sections.isEmpty) {
+                  } else if (!snapshot.hasData ||
+                      snapshot.data!.sections.isEmpty) {
                     return Center(
                       child: Text(
                         'No sections found',
@@ -139,135 +146,129 @@ class ManageSectionsScreen extends StatelessWidget {
                               ),
                             ),
                             children: [
-                              // Add Video Form
+                              // Button to add a resource (Video or PDF)
                               Padding(
                                 padding: const EdgeInsets.all(16.0),
-                                child: Column(
-                                  children: [
-                                    TextFormField(
-                                      controller: _videoTitleController,
-                                      decoration: InputDecoration(
-                                        labelText: 'Video Title',
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        prefixIcon: Icon(Icons.video_library),
-                                      ),
+                                child: ElevatedButton.icon(
+                                  onPressed: () => _showAddResourceDialog(
+                                      context, courseId, section.sectionTitle ?? ''),
+                                  icon: Icon(Icons.add),
+                                  label: Text('Add Resource'),
+                                  style: ElevatedButton.styleFrom(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 20, vertical: 15),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
                                     ),
-                                    SizedBox(height: 10),
-                                    TextFormField(
-                                      controller: _videoUrlController,
-                                      decoration: InputDecoration(
-                                        labelText: 'Video URL',
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                              // List of Videos
+                              if (section.videos.isNotEmpty)
+                                ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: NeverScrollableScrollPhysics(),
+                                  itemCount: section.videos.length,
+                                  itemBuilder: (context, videoIndex) {
+                                    final video = section.videos[videoIndex];
+                                    return ListTile(
+                                      title: Text(
+                                        video.title ?? "Untitled Video",
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
                                         ),
-                                        prefixIcon: Icon(Icons.link),
                                       ),
-                                    ),
-                                    SizedBox(height: 10),
-                                    ElevatedButton(
-                                      onPressed: () async {
-                                        if (_videoTitleController.text.isNotEmpty &&
-                                            _videoUrlController.text.isNotEmpty) {
-                                          await courseProvider.addVideoToSection(
-                                            courseId,
-                                            section.sectionTitle!,
-                                            Video(
-                                              title: _videoTitleController.text,
-                                              videoUrl: _videoUrlController.text,
+                                      leading: Icon(Icons.video_collection,
+                                          color: Colors.blueAccent),
+                                      onTap: () {
+                                        String? videoId = YoutubePlayer.convertUrlToId(video.videoUrl!);
+                                        if (videoId != null) {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => VideoPlayerScreen(videoId: videoId),
                                             ),
                                           );
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('Video added successfully!'),
-                                              backgroundColor: Colors.green,
-                                            ),
-                                          );
-                                          _videoTitleController.clear();
-                                          _videoUrlController.clear();
                                         } else {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(
-                                              content: Text('Please fill all fields'),
+                                              content: Text('Invalid YouTube URL'),
                                               backgroundColor: Colors.red,
                                             ),
                                           );
                                         }
                                       },
-                                      style: ElevatedButton.styleFrom(
-                                        padding: EdgeInsets.symmetric(
-                                            horizontal: 20, vertical: 15),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(10),
+                                      trailing: IconButton(
+                                        icon: Icon(Icons.delete, color: Colors.red),
+                                        onPressed: () async {
+                                          await courseProvider.deleteVideo(
+                                              courseId,
+                                              section.sectionTitle!,
+                                              videoIndex);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Video deleted successfully!'),
+                                              backgroundColor: Colors.green,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    );
+                                  },
+                                )
+                              else
+                                ...[ListTile(title: Text('No videos available.'))],
+                              // List of PDFs
+                              if (section.pdfs.isNotEmpty)
+                                ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: NeverScrollableScrollPhysics(),
+                                  itemCount: section.pdfs.length,
+                                  itemBuilder: (context, pdfIndex) {
+                                    final pdf = section.pdfs[pdfIndex];
+                                    return ListTile(
+                                      title: Text(
+                                        pdf.title ?? "Untitled PDF",
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                      child: Text('Add Video'),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // List of Videos
-                              ListView.builder(
-                                shrinkWrap: true,
-                                physics: NeverScrollableScrollPhysics(),
-                                itemCount: section.videos.length,
-                                itemBuilder: (context, videoIndex) {
-                                  final video = section.videos[videoIndex];
-                                  return ListTile(
-                                    title: Text(
-                                      video.title ?? "Untitled Video",
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      video.videoUrl ?? "No URL",
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                    leading: Icon(Icons.video_collection,
-                                        color: Colors.blueAccent),
-                                    onTap: () {
-                                      // Extract YouTube video ID from the URL
-                                      String? videoId =
-                                      YoutubePlayer.convertUrlToId(video.videoUrl!);
-                                      if (videoId != null) {
+
+                                      leading: Icon(Icons.picture_as_pdf, color: Colors.redAccent),
+                                      onTap: () {
+                                        // Navigate to PDF preview screen.
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) =>
-                                                VideoPlayerScreen(videoId: videoId),
-                                          ),
-                                        );
-                                      } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Invalid YouTube URL'),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    trailing: IconButton(
-                                      icon: Icon(Icons.delete, color: Colors.red),
-                                      onPressed: () async {
-                                        await courseProvider.deleteVideo(
-                                            courseId, section.sectionTitle!, videoIndex);
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Video deleted successfully!'),
-                                            backgroundColor: Colors.green,
+                                            builder: (context) => PdfPreviewScreen(
+                                              pdfUrl: pdf.pdfUrl!,
+                                              title: pdf.title ?? "PDF Preview",
+                                            ),
                                           ),
                                         );
                                       },
-                                    ),
-                                  );
-                                },
-                              ),
+                                      trailing: IconButton(
+                                        icon: Icon(Icons.delete, color: Colors.red),
+                                        onPressed: () async {
+                                          await courseProvider.deletePdfFromSection(
+                                              courseId,
+                                              section.sectionTitle!,
+                                              pdfIndex);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('PDF deleted successfully!'),
+                                              backgroundColor: Colors.green,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    );
+                                  },
+                                )
+                              else
+                                ...[ListTile(title: Text('No PDFs available.'))],
                             ],
                           ),
                         );
@@ -282,9 +283,208 @@ class ManageSectionsScreen extends StatelessWidget {
       ),
     );
   }
+
+  /// Displays a dialog to add a resource (Video or PDF) to a section.
+  void _showAddResourceDialog(
+      BuildContext context, String courseId, String sectionTitle) {
+    // Local controllers for the resource title.
+    final TextEditingController resourceTitleController = TextEditingController();
+    // For Video, we use a text field; for PDF, we'll allow picking a file.
+    final TextEditingController resourceUrlController = TextEditingController();
+
+    // Default resource type is Video.
+    String resourceType = "Video";
+    // For PDF, we store the picked file.
+    PlatformFile? pickedPdfFile;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text('Add Resource to "$sectionTitle"'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Radio buttons to select resource type.
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Radio<String>(
+                        value: "Video",
+                        groupValue: resourceType,
+                        onChanged: (value) {
+                          setState(() {
+                            resourceType = value!;
+                          });
+                        },
+                      ),
+                      Text("Video"),
+                      SizedBox(width: 20),
+                      Radio<String>(
+                        value: "PDF",
+                        groupValue: resourceType,
+                        onChanged: (value) {
+                          setState(() {
+                            resourceType = value!;
+                          });
+                        },
+                      ),
+                      Text("PDF"),
+                    ],
+                  ),
+                  SizedBox(height: 10),
+                  // Resource title field (same for both)
+                  TextField(
+                    controller: resourceTitleController,
+                    decoration: InputDecoration(
+                      labelText: resourceType == "Video"
+                          ? 'Video Title'
+                          : 'PDF Title',
+                      hintText: 'Enter ${resourceType.toLowerCase()} title',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      prefixIcon: resourceType == "Video"
+                          ? Icon(Icons.video_library)
+                          : Icon(Icons.picture_as_pdf),
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  // For Video, show a text field to enter URL.
+                  // For PDF, show a button to pick the file.
+                  if (resourceType == "Video")
+                    TextField(
+                      controller: resourceUrlController,
+                      decoration: InputDecoration(
+                        labelText: 'Video URL',
+                        hintText: 'Enter valid YouTube URL',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        prefixIcon: Icon(Icons.link),
+                      ),
+                    )
+                  else
+                    Column(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            // Pick a PDF file using file_picker.
+                            FilePickerResult? result = await FilePicker.platform.pickFiles(
+                              type: FileType.custom,
+                              allowedExtensions: ['pdf'],
+                            );
+                            if (result != null && result.files.isNotEmpty) {
+                              setState(() {
+                                pickedPdfFile = result.files.first;
+                              });
+                            }
+                          },
+                          icon: Icon(Icons.folder),
+                          label: Text('Pick PDF'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blueAccent,
+                          ),
+                        ),
+                        if (pickedPdfFile != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              'Selected File: ${pickedPdfFile!.name}',
+                              style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  String title = resourceTitleController.text.trim();
+                  if (title.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Please enter a resource title'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+                  if (resourceType == "Video") {
+                    String url = resourceUrlController.text.trim();
+                    if (url.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Please enter a video URL'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    // Validate YouTube URL.
+                    String? videoId = YoutubePlayer.convertUrlToId(url);
+                    if (videoId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Please enter a valid YouTube video URL'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    await Provider.of<CourseProvider>(context, listen: false)
+                        .addVideoToSection(courseId, sectionTitle, Video(title: title, videoUrl: url));
+                  } else {
+                    // PDF branch: ensure a file is picked.
+                    if (pickedPdfFile == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Please pick a PDF file'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    // Upload the picked PDF file.
+                    File pdfFile = File(pickedPdfFile!.path!);
+                    String? pdfUrl = await Provider.of<CourseProvider>(context, listen: false).uploadPdf(pdfFile);
+                    if (pdfUrl != null) {
+                      await Provider.of<CourseProvider>(context, listen: false)
+                          .addPdfToSection(courseId, sectionTitle, title, pdfUrl);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to upload PDF'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                  }
+                  Navigator.pop(context);
+                  // Optionally, refresh the course data.
+                },
+                child: Text('Add Resource'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
-// Video Player Screen
+// Video Player Screen to play YouTube videos.
 class VideoPlayerScreen extends StatefulWidget {
   final String videoId;
 
@@ -328,14 +528,34 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           controller: _controller,
           showVideoProgressIndicator: true,
           progressIndicatorColor: Colors.blueAccent,
-          progressColors: ProgressBarColors(
-            playedColor: Colors.blue,
-            handleColor: Colors.blueAccent,
-          ),
           onReady: () {
             print('YouTube Player is ready.');
           },
         ),
+      ),
+    );
+  }
+}
+
+// PDF Preview Screen to display PDF documents within the app.
+class PdfPreviewScreen extends StatelessWidget {
+  final String pdfUrl;
+  final String title;
+
+  const PdfPreviewScreen({Key? key, required this.pdfUrl, required this.title})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+        backgroundColor: Colors.blueAccent,
+      ),
+      body: PDF().cachedFromUrl(
+        pdfUrl,
+        placeholder: (progress) => Center(child: Text('$progress %')),
+        errorWidget: (error) => Center(child: Text('Error: $error')),
       ),
     );
   }

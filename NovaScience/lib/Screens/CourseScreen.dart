@@ -1,7 +1,11 @@
 // CourseScreen.dart
 
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cached_pdfview/flutter_cached_pdfview.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:intl/intl.dart';
 import 'package:nova_science/Service/AuthService.dart';
@@ -58,10 +62,11 @@ class _CourseScreenState extends State<CourseScreen>
       // Fetch Current User
       CustomUser? currentUser = await authProvider.getCurrentUser();
       if (_course != null && currentUser != null) {
-        // Check Enrollment
+        // Check Enrollment (assuming enrollments is a list of objects with courseId)
         isEnrolled = (currentUser.enrollments as List?)?.any((enrollment) {
           return enrollment.courseId == _course!.id;
-        }) ?? false;
+        }) ??
+            false;
 
         // Check Admin Status
         isAdmin = currentUser.role == 'Admin';
@@ -85,11 +90,296 @@ class _CourseScreenState extends State<CourseScreen>
       );
     }
   }
+  void _showAddResourceDialog(String courseId, String sectionTitle) {
+    final TextEditingController _titleController = TextEditingController();
+    final TextEditingController _urlController = TextEditingController();
+    String resourceType = "Video"; // Default type is Video
+    // Variable to hold the picked PDF file (if any)
+    PlatformFile? pickedPdf;
 
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text('Add Resource to "$sectionTitle"'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Toggle between Video and PDF using radio buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Radio<String>(
+                        value: "Video",
+                        groupValue: resourceType,
+                        onChanged: (value) {
+                          setState(() {
+                            resourceType = value!;
+                            // Clear PDF selection when switching to Video
+                            pickedPdf = null;
+                            _urlController.clear();
+                          });
+                        },
+                      ),
+                      const Text("Video"),
+                      const SizedBox(width: 20),
+                      Radio<String>(
+                        value: "PDF",
+                        groupValue: resourceType,
+                        onChanged: (value) {
+                          setState(() {
+                            resourceType = value!;
+                            // Clear URL when switching to PDF
+                            _urlController.clear();
+                          });
+                        },
+                      ),
+                      const Text("PDF"),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Common: Resource title text field
+                  TextField(
+                    controller: _titleController,
+                    decoration: InputDecoration(
+                      labelText: resourceType == "Video"
+                          ? 'Video Title'
+                          : 'PDF Title',
+                      hintText: 'Enter ${resourceType.toLowerCase()} title',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      prefixIcon: resourceType == "Video"
+                          ? Icon(Icons.video_library)
+                          : Icon(Icons.picture_as_pdf),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  // For Video, show a text field to enter URL.
+                  // For PDF, show a button to pick the file.
+                  if (resourceType == "Video")
+                    TextField(
+                      controller: _urlController,
+                      decoration: InputDecoration(
+                        labelText: 'Video URL',
+                        hintText: 'Enter valid YouTube URL',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        prefixIcon: Icon(Icons.link),
+                      ),
+                    )
+                  else
+                    Column(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            // Use file_picker to pick a PDF file.
+                            FilePickerResult? result =
+                            await FilePicker.platform.pickFiles(
+                              type: FileType.custom,
+                              allowedExtensions: ['pdf'],
+                            );
+                            if (result != null && result.files.isNotEmpty) {
+                              setState(() {
+                                pickedPdf = result.files.first;
+                                // Optionally, update the URL field to show the file name.
+                                _urlController.text = pickedPdf!.name;
+                              });
+                            }
+                          },
+                          icon: Icon(Icons.folder),
+                          label: Text('Pick PDF from Gallery'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blueAccent,
+                          ),
+                        ),
+                        if (pickedPdf != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              'Selected File: ${pickedPdf!.name}',
+                              style: TextStyle(
+                                  fontSize: 14, fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  String title = _titleController.text.trim();
+                  if (title.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please enter a resource title'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+                  if (resourceType == "Video") {
+                    String url = _urlController.text.trim();
+                    if (url.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please enter a video URL'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    // Validate YouTube URL.
+                    String? videoId = YoutubePlayer.convertUrlToId(url);
+                    if (videoId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please enter a valid YouTube video URL'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    await Provider.of<CourseProvider>(context, listen: false)
+                        .addVideoToSection(
+                        courseId, sectionTitle, Video(title: title, videoUrl: url));
+                  } else {
+                    // For PDF, ensure a file was picked.
+                    if (pickedPdf == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please pick a PDF file'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    // Create a File instance from the picked file's path.
+                    File pdfFile = File(pickedPdf!.path!);
+                    // Upload the PDF using the provider's uploadPdf method.
+                    String? uploadedPdfUrl =
+                    await Provider.of<CourseProvider>(context, listen: false)
+                        .uploadPdf(pdfFile);
+                    if (uploadedPdfUrl != null) {
+                      await Provider.of<CourseProvider>(context, listen: false)
+                          .addPdfToSection(courseId, sectionTitle, title, uploadedPdfUrl);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Failed to upload PDF'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                  }
+                  Navigator.pop(context);
+                  await _initializeCourse();
+                },
+                child: const Text('Add Resource'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+  /// NEW: Shows a dialog to edit a section's title.
+  void _showEditSectionDialog(Section section, int sectionIndex) {
+    final TextEditingController _sectionTitleController =
+    TextEditingController(text: section.sectionTitle);
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Edit Section'),
+          content: TextField(
+            controller: _sectionTitleController,
+            decoration: const InputDecoration(
+                labelText: 'Section Title',
+                hintText: 'Enter new section title'),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
+            TextButton(
+              onPressed: () async {
+                if (_sectionTitleController.text.isNotEmpty) {
+                  setState(() => isActionLoading = true); // Start loading
+                  final courseProvider =
+                  Provider.of<CourseProvider>(context, listen: false);
+                  await courseProvider.editSection(
+                      widget.courseId,
+                      section.sectionTitle ?? '',
+                      _sectionTitleController.text);
+                  setState(() => isActionLoading = false); // End loading
+                  Navigator.pop(context);
+
+                  // Refresh course data
+                  await _initializeCourse();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Please enter a section title')));
+                }
+              },
+              child: isActionLoading
+                  ? SpinKitDoubleBounce(color: Colors.white)
+                  : const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// NEW: Shows a confirmation dialog before deleting a section.
+  void _confirmDeleteSection(int sectionIndex, Section section) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Section'),
+          content:
+          const Text('Are you sure you want to delete this section?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                setState(() => isActionLoading = true); // Start loading
+                await Provider.of<CourseProvider>(context, listen: false)
+                    .deleteSection(widget.courseId, section.sectionTitle ?? '');
+                setState(() => isActionLoading = false); // End loading
+                Navigator.of(context).pop(); // Close the dialog
+
+                // Refresh course data
+                await _initializeCourse();
+              },
+              child: isActionLoading
+                  ? SpinKitDoubleBounce(color: Colors.white, size: 20)
+                  : const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   /// Deletes a specific video from a course section.
   void _deleteVideo(String courseId, String sectionTitle, int videoIndex) async {
-    // Show a confirmation dialog before deletion
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -110,10 +400,9 @@ class _CourseScreenState extends State<CourseScreen>
       },
     );
 
-    // If the user confirms deletion, proceed with deletion
     if (shouldDelete == true) {
       setState(() {
-        isActionLoading = true; // Start loading
+        isActionLoading = true;
       });
 
       try {
@@ -122,13 +411,11 @@ class _CourseScreenState extends State<CourseScreen>
         await courseProvider.deleteVideo(courseId, sectionTitle, videoIndex);
 
         setState(() {
-          isActionLoading = false; // End loading
+          isActionLoading = false;
         });
 
-        // Refresh course data
         await _initializeCourse();
 
-        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Video deleted successfully.'),
@@ -138,7 +425,7 @@ class _CourseScreenState extends State<CourseScreen>
       } catch (e) {
         print("Error deleting video: $e");
         setState(() {
-          isActionLoading = false; // End loading
+          isActionLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -151,8 +438,7 @@ class _CourseScreenState extends State<CourseScreen>
   }
 
   /// Shows a dialog to edit a video's details.
-  void _showEditVideoDialog(
-      String sectionTitle, Video video, int videoIndex) {
+  void _showEditVideoDialog(String sectionTitle, Video video, int videoIndex) {
     final TextEditingController _titleController =
     TextEditingController(text: video.title);
     final TextEditingController _urlController =
@@ -199,8 +485,8 @@ class _CourseScreenState extends State<CourseScreen>
                 if (newTitle.isEmpty || newUrl.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content:
-                      Text('Please fill out both title and URL.'),
+                      content: Text(
+                          'Please fill out both title and URL.'),
                       backgroundColor: Colors.orange,
                     ),
                   );
@@ -208,12 +494,13 @@ class _CourseScreenState extends State<CourseScreen>
                 }
 
                 // Validate YouTube URL
-                String? videoId = YoutubePlayer.convertUrlToId(newUrl);
+                String? videoId =
+                YoutubePlayer.convertUrlToId(newUrl);
                 if (videoId == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content:
-                      Text('Please enter a valid YouTube video URL.'),
+                      content: Text(
+                          'Please enter a valid YouTube video URL.'),
                       backgroundColor: Colors.orange,
                     ),
                   );
@@ -239,15 +526,11 @@ class _CourseScreenState extends State<CourseScreen>
                   });
 
                   Navigator.pop(context);
-
-                  // Refresh course data
                   await _initializeCourse();
 
-                  // Show success message
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content:
-                      Text('Video updated successfully!'),
+                      content: Text('Video updated successfully!'),
                       backgroundColor: Colors.green,
                     ),
                   );
@@ -258,8 +541,7 @@ class _CourseScreenState extends State<CourseScreen>
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content:
-                      Text('Failed to update video. Please try again.'),
+                      content: Text('Failed to update video. Please try again.'),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -341,7 +623,6 @@ class _CourseScreenState extends State<CourseScreen>
       isActionLoading = false;
       if (success) {
         isEnrolled = true;
-        // Update the TabController based on the new enrollment status
         _tabController.dispose();
         _tabController = TabController(
           length: (isEnrolled || isAdmin) ? 3 : 2,
@@ -358,7 +639,6 @@ class _CourseScreenState extends State<CourseScreen>
         ),
       );
 
-      // Initialize YouTube player if there are videos
       if (_course!.sections.isNotEmpty &&
           _course!.sections.first.videos.isNotEmpty) {
         _initializeYoutubePlayer(
@@ -403,7 +683,6 @@ class _CourseScreenState extends State<CourseScreen>
       isActionLoading = false;
       if (success) {
         isEnrolled = false;
-        // Update the TabController based on the new enrollment status
         _tabController.dispose();
         _tabController = TabController(
           length: (isEnrolled || isAdmin) ? 3 : 2,
@@ -419,8 +698,6 @@ class _CourseScreenState extends State<CourseScreen>
           backgroundColor: Colors.green,
         ),
       );
-
-      // Dispose YouTube controller if unenrolled
       _youtubeController?.dispose();
       _youtubeController = null;
     } else {
@@ -532,15 +809,13 @@ class _CourseScreenState extends State<CourseScreen>
             TextButton(
               onPressed: () async {
                 if (_sectionTitleController.text.isNotEmpty) {
-                  setState(() => isActionLoading = true); // Start loading
+                  setState(() => isActionLoading = true);
                   final courseProvider =
                   Provider.of<CourseProvider>(context, listen: false);
                   await courseProvider.addSection(
                       widget.courseId, _sectionTitleController.text);
-                  setState(() => isActionLoading = false); // End loading
+                  setState(() => isActionLoading = false);
                   Navigator.pop(context);
-
-                  // Refresh course data
                   await _initializeCourse();
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -557,174 +832,18 @@ class _CourseScreenState extends State<CourseScreen>
     );
   }
 
-  /// Shows a dialog to add a new video to a section.
-  void _showAddVideoDialog(String courseId, String sectionTitle) {
-    final _videoTitleController = TextEditingController();
-    final _videoUrlController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text('Add Video to $sectionTitle'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _videoTitleController,
-                decoration: const InputDecoration(
-                    labelText: 'Video Title',
-                    hintText: 'Enter video title'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _videoUrlController,
-                decoration: const InputDecoration(
-                    labelText: 'Video URL',
-                    hintText: 'Enter valid YouTube URL'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel')),
-            TextButton(
-              onPressed: () async {
-                if (_videoTitleController.text.isNotEmpty &&
-                    _videoUrlController.text.isNotEmpty) {
-                  // Validate YouTube URL
-                  String? videoId = YoutubePlayer.convertUrlToId(
-                      _videoUrlController.text);
-                  if (videoId != null) {
-                    setState(() => isActionLoading = true); // Start loading
-                    await Provider.of<CourseProvider>(context, listen: false)
-                        .addVideoToSection(
-                        courseId,
-                        sectionTitle,
-                        Video(
-                            title: _videoTitleController.text,
-                            videoUrl: _videoUrlController.text));
-                    setState(() => isActionLoading = false); // End loading
-                    Navigator.pop(context);
-
-                    // Refresh course data
-                    await _initializeCourse();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content:
-                        Text('Please enter a valid YouTube video URL')));
-                  }
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Please fill out all fields')));
-                }
-              },
-              child: isActionLoading
-                  ? SpinKitDoubleBounce(color: Colors.white)
-                  : const Text('Add Video'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Shows a dialog to edit a section's title.
-  void _showEditSectionDialog(Section section, int sectionIndex) {
-    final _sectionTitleController =
-    TextEditingController(text: section.sectionTitle);
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Edit Section'),
-          content: TextField(
-            controller: _sectionTitleController,
-            decoration: const InputDecoration(
-                labelText: 'Section Title',
-                hintText: 'Enter new section title'),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel')),
-            TextButton(
-              onPressed: () async {
-                if (_sectionTitleController.text.isNotEmpty) {
-                  setState(() => isActionLoading = true); // Start loading
-                  final courseProvider =
-                  Provider.of<CourseProvider>(context, listen: false);
-                  await courseProvider.editSection(
-                      widget.courseId,
-                      section.sectionTitle ?? '',
-                      _sectionTitleController.text);
-                  setState(() => isActionLoading = false); // End loading
-                  Navigator.pop(context);
-
-                  // Refresh course data
-                  await _initializeCourse();
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Please enter a section title')));
-                }
-              },
-              child: isActionLoading
-                  ? SpinKitDoubleBounce(color: Colors.white)
-                  : const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Shows a confirmation dialog before deleting a section.
-  void _confirmDeleteSection(int sectionIndex, Section section) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Section'),
-          content: const Text('Are you sure you want to delete this section?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () async {
-                setState(() => isActionLoading = true); // Start loading
-                await Provider.of<CourseProvider>(context, listen: false)
-                    .deleteSection(widget.courseId, section.sectionTitle ?? '');
-                setState(() => isActionLoading = false); // End loading
-                Navigator.of(context).pop(); // Close the dialog
-
-                // Refresh course data
-                await _initializeCourse();
-              },
-              child: isActionLoading
-                  ? SpinKitDoubleBounce(color: Colors.white, size: 20)
-                  : const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  /// NEW: Shows a dialog to add a resource (Video or PDF) to a section.
 
   /// Builds the Overview tab content.
   Widget _buildOverview(Course course) {
-    final String adminPhoneNumber =
-        "0757439885"; // Replace with the actual admin phone number
+    final String adminPhoneNumber = course.medium == 'Tamil'?
+        "+94757439885" : "+94766224999"; // Replace with the actual admin phone number
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 30.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          // Section Title
           Text(
             'Course Overview',
             style: TextStyle(
@@ -734,8 +853,6 @@ class _CourseScreenState extends State<CourseScreen>
             ),
           ),
           const SizedBox(height: 20),
-
-          // Gradient Course Card
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -757,7 +874,6 @@ class _CourseScreenState extends State<CourseScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Instructor Details
                   Row(
                     children: [
                       const Icon(Icons.person,
@@ -776,8 +892,6 @@ class _CourseScreenState extends State<CourseScreen>
                     ],
                   ),
                   const SizedBox(height: 16),
-
-                  // Course Description
                   Text(
                     'Course Description',
                     style: const TextStyle(
@@ -797,13 +911,30 @@ class _CourseScreenState extends State<CourseScreen>
                     maxLines: 5,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Course Medium',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    course.medium ?? 'No medium specified',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.6,
+                      color: Colors.white70,
+                    ),
+                    maxLines: 5,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 20),
-
-                  // Price, Duration, and Rating
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Price and Duration
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -825,7 +956,6 @@ class _CourseScreenState extends State<CourseScreen>
                           ),
                         ],
                       ),
-                      // Average Rating
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
@@ -851,8 +981,7 @@ class _CourseScreenState extends State<CourseScreen>
                           else
                             const Text(
                               'No Ratings Yet',
-                              style:
-                              TextStyle(fontSize: 14, color: Colors.white70),
+                              style: TextStyle(fontSize: 14, color: Colors.white70),
                             ),
                         ],
                       ),
@@ -863,8 +992,6 @@ class _CourseScreenState extends State<CourseScreen>
             ),
           ),
           const SizedBox(height: 30),
-
-          // Admin Request Section
           Text(
             'Request Admin for Enrollment',
             style: TextStyle(
@@ -874,8 +1001,6 @@ class _CourseScreenState extends State<CourseScreen>
             ),
           ),
           const SizedBox(height: 16),
-
-          // Admin Contact Card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -916,7 +1041,6 @@ class _CourseScreenState extends State<CourseScreen>
                   ],
                 ),
                 const SizedBox(height: 16),
-                // Buttons
                 Row(
                   children: [
                     Expanded(
@@ -927,8 +1051,7 @@ class _CourseScreenState extends State<CourseScreen>
                           if (await canLaunchUrl(phoneUri)) {
                             await launchUrl(phoneUri);
                           } else {
-                            _showErrorSnackbar(
-                                'Could not launch phone dialer.');
+                            _showErrorSnackbar('Could not launch phone dialer.');
                           }
                         },
                         icon: const Icon(Icons.call),
@@ -938,8 +1061,7 @@ class _CourseScreenState extends State<CourseScreen>
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          padding:
-                          const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
                     ),
@@ -968,8 +1090,7 @@ class _CourseScreenState extends State<CourseScreen>
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          padding:
-                          const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
                     ),
@@ -984,7 +1105,7 @@ class _CourseScreenState extends State<CourseScreen>
     );
   }
 
-  /// Helper method to show error SnackBar
+  /// Helper method to show error SnackBar.
   void _showErrorSnackbar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1012,13 +1133,13 @@ class _CourseScreenState extends State<CourseScreen>
       itemCount: course.sections.length,
       itemBuilder: (context, index) {
         final section = course.sections[index];
-        return _buildSectionCard(section, index);
+        return _buildSectionCard(section, index, course.id!);
       },
     );
   }
 
   /// Builds individual section cards with expandable content.
-  Widget _buildSectionCard(Section section, int sectionIndex) {
+  Widget _buildSectionCard(Section section, int sectionIndex, String courseId) {
     return Card(
       elevation: 4,
       margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
@@ -1058,24 +1179,20 @@ class _CourseScreenState extends State<CourseScreen>
               int videoIndex = entry.key;
               Video video = entry.value;
 
-              // Determine if the current video is the first video in the course
               bool isFirstVideo = sectionIndex == 0 && videoIndex == 0;
-
-              // Determine if the user can access the video
               bool canAccessVideo = isFirstVideo || isEnrolled || isAdmin;
 
               return ListTile(
                 leading: Icon(
-                  isFirstVideo
-                      ? Icons.lock_open
-                      : Icons.lock, // Open lock for free video
+                  isFirstVideo ? Icons.lock_open : Icons.lock,
                   color: isFirstVideo
                       ? Colors.green
                       : (canAccessVideo ? Colors.blueAccent : Colors.redAccent),
                 ),
                 title: Text(video.title ?? 'Untitled Video'),
-                subtitle: Text(
-                    isFirstVideo ? 'Free Preview' : (canAccessVideo ? 'Available to Play' : 'Enroll to Play')),
+                subtitle: Text(isFirstVideo
+                    ? 'Free Preview'
+                    : (canAccessVideo ? 'Available to Play' : 'Enroll to Play')),
                 onTap: () {
                   if (canAccessVideo) {
                     _playVideo(video.videoUrl ?? '', sectionIndex, videoIndex);
@@ -1088,24 +1205,25 @@ class _CourseScreenState extends State<CourseScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon:
-                      Icon(Icons.edit, color: Colors.blueAccent),
+                      icon: Icon(Icons.edit, color: Colors.blueAccent),
                       onPressed: () => _showEditVideoDialog(
                           section.sectionTitle!, video, videoIndex),
                       tooltip: 'Edit Video',
                     ),
                     IconButton(
-                      icon:
-                      Icon(Icons.delete, color: Colors.redAccent),
+                      icon: Icon(Icons.delete, color: Colors.redAccent),
                       onPressed: () => _deleteVideo(
-                          widget.courseId, section.sectionTitle ?? '', videoIndex),
+                          widget.courseId,
+                          section.sectionTitle ?? '',
+                          videoIndex),
                       tooltip: 'Delete Video',
                     ),
                   ],
                 )
-                    : null, // Hide edit/delete buttons if not Admin
+                    : null,
               );
             }).toList()
+
           else
             Padding(
               padding: const EdgeInsets.all(8.0),
@@ -1114,10 +1232,56 @@ class _CourseScreenState extends State<CourseScreen>
           if (isAdmin)
             TextButton.icon(
               onPressed: () =>
-                  _showAddVideoDialog(widget.courseId, section.sectionTitle ?? ''),
+                  _showAddResourceDialog(widget.courseId, section.sectionTitle ?? ''),
               icon: Icon(Icons.add, color: Colors.teal),
-              label: Text('Add Video'),
+              label: Text('Add Resource'),
             ),
+          // List of PDFs
+          if (section.pdfs.isNotEmpty)
+            ListView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              itemCount: section.pdfs.length,
+              itemBuilder: (context, pdfIndex) {
+                final pdf = section.pdfs[pdfIndex];
+                return ListTile(
+                  title: Text(
+                    pdf.title ?? "Untitled PDF",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  leading: Icon(Icons.picture_as_pdf, color: Colors.redAccent),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PdfPreviewScreen(
+                          pdfUrl: pdf.pdfUrl!,
+                          title: pdf.title ?? "PDF Preview",
+                        ),
+                      ),
+                    );
+                  },
+                  trailing: IconButton(
+                    icon: Icon(Icons.delete, color: Colors.red),
+                    onPressed: () async {
+                      await Provider.of<CourseProvider>(context, listen: false)
+                          .deletePdfFromSection(courseId, section.sectionTitle!, pdfIndex);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('PDF deleted successfully!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            )
+          else
+            ListTile(title: Text('No PDFs available.')),
         ],
       ),
     );
@@ -1164,6 +1328,7 @@ class _CourseScreenState extends State<CourseScreen>
               mute: false,
               enableCaption: true,
               isLive: false,
+              showLiveFullscreenButton: true
             ),
           );
         }
@@ -1188,6 +1353,9 @@ class _CourseScreenState extends State<CourseScreen>
     TextEditingController(text: course.price.toString());
     final TextEditingController subjectController =
     TextEditingController(text: course.subject);
+    final TextEditingController mediumController =
+    TextEditingController(text: course.medium);
+
 
     showDialog(
       context: context,
@@ -1231,6 +1399,14 @@ class _CourseScreenState extends State<CourseScreen>
                     border: OutlineInputBorder(),
                   ),
                 ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: mediumController,
+                  decoration: const InputDecoration(
+                    labelText: 'Medium',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1240,7 +1416,6 @@ class _CourseScreenState extends State<CourseScreen>
                 child: const Text('Cancel')),
             TextButton(
               onPressed: () async {
-                // Validate and save course details
                 if (titleController.text.isNotEmpty &&
                     descriptionController.text.isNotEmpty &&
                     priceController.text.isNotEmpty) {
@@ -1248,7 +1423,6 @@ class _CourseScreenState extends State<CourseScreen>
                     isActionLoading = true;
                   });
 
-                  // Update the course object with new values
                   final updatedCourse = Course(
                     id: course.id,
                     courseTitle: titleController.text,
@@ -1261,9 +1435,9 @@ class _CourseScreenState extends State<CourseScreen>
                     enrolledUserIds: course.enrolledUserIds,
                     sections: course.sections,
                     feedbacks: course.feedbacks,
+                    medium: course.medium
                   );
 
-                  // Update in the provider
                   await Provider.of<CourseProvider>(context, listen: false)
                       .updateCourse(updatedCourse);
 
@@ -1273,7 +1447,6 @@ class _CourseScreenState extends State<CourseScreen>
 
                   Navigator.pop(context);
 
-                  // Show a success message
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: const Text('Course updated successfully!'),
@@ -1281,7 +1454,6 @@ class _CourseScreenState extends State<CourseScreen>
                     ),
                   );
 
-                  // Refresh course data
                   await _initializeCourse();
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -1314,7 +1486,6 @@ class _CourseScreenState extends State<CourseScreen>
             key: _formKey,
             child: Column(
               children: [
-                // Feedback Text
                 TextFormField(
                   controller: _feedbackController,
                   decoration: const InputDecoration(
@@ -1332,7 +1503,6 @@ class _CourseScreenState extends State<CourseScreen>
                   },
                 ),
                 const SizedBox(height: 12),
-                // Rating Bar
                 Text(
                   'Rate this course:',
                   style: TextStyle(fontSize: 16, color: Colors.grey[700]),
@@ -1383,7 +1553,6 @@ class _CourseScreenState extends State<CourseScreen>
                   return;
                 }
 
-                // Check if user has already submitted feedback
                 bool hasFeedback = _course!.feedbacks.any(
                         (fb) => fb.userId.toString() == currentUser.id);
                 if (hasFeedback) {
@@ -1406,12 +1575,11 @@ class _CourseScreenState extends State<CourseScreen>
                   currentUser.name ?? 'Anonymous',
                   _feedbackController.text,
                   currentUser.id!,
-                  _currentRating, // Pass the rating
+                  _currentRating,
                 );
 
                 _feedbackController.clear();
 
-                // Show success or error message based on result
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -1429,7 +1597,6 @@ class _CourseScreenState extends State<CourseScreen>
                   _isSubmitting = false;
                 });
 
-                // Refresh course data
                 await _initializeCourse();
               }
             },
@@ -1456,16 +1623,13 @@ class _CourseScreenState extends State<CourseScreen>
     try {
       final courseProvider =
       Provider.of<CourseProvider>(context, listen: false);
-      // Check if user has already submitted feedback
       bool hasFeedback = _course!.feedbacks
           .any((fb) => fb.userId.toString() == userId);
       if (hasFeedback) {
-        // Optionally, update existing feedback instead of adding a new one
-        // Implement update logic if needed
-        return false; // Indicate failure to add duplicate feedback
+        return false;
       }
-      await courseProvider.addFeedback(courseId, userId, feedbackText,
-          userName, rating);
+      await courseProvider.addFeedback(
+          courseId, userId, feedbackText, userName, rating);
       return true;
     } catch (e) {
       print("Error adding feedback: $e");
@@ -1483,17 +1647,16 @@ class _CourseScreenState extends State<CourseScreen>
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
             child: SpinKitDoubleBounce(color: Colors.blueAccent),
-          ); // While loading
+          );
         } else if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}')); // Error state
+          return Center(child: Text('Error: ${snapshot.error}'));
         } else if (!snapshot.hasData) {
-          return const Center(child: Text('No user data available')); // No user available
+          return const Center(child: Text('No user data available'));
         } else {
           final currentUser = snapshot.data!;
           return ListView(
             padding: const EdgeInsets.all(16.0),
             children: [
-              // Average Rating Display
               Text(
                 'Average Rating: ${_course!.averageRating?.toStringAsFixed(1) ?? 'N/A'} / 5',
                 style: const TextStyle(
@@ -1518,12 +1681,10 @@ class _CourseScreenState extends State<CourseScreen>
                   style: TextStyle(fontSize: 14, color: Colors.grey),
                 ),
               const SizedBox(height: 10),
-              // Add Feedback Form if applicable
               if ((isEnrolled || isAdmin) &&
                   !_course!.feedbacks.any((fb) => fb.userId.toString() == currentUser.id))
                 _buildFeedbackForm(currentUser),
               const SizedBox(height: 10),
-              // Feedbacks List Header
               Text(
                 'Feedbacks',
                 style: TextStyle(
@@ -1533,7 +1694,6 @@ class _CourseScreenState extends State<CourseScreen>
                 ),
               ),
               const SizedBox(height: 10),
-              // All Feedbacks List
               ..._course!.feedbacks
                   .map((fb) => _buildFeedbackCard(fb, currentUser))
                   .toList(),
@@ -1549,7 +1709,7 @@ class _CourseScreenState extends State<CourseScreen>
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance
           .collection('users')
-          .doc(feedback.userId.toString()) // Ensure userId is a string
+          .doc(feedback.userId.toString())
           .get(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1574,18 +1734,11 @@ class _CourseScreenState extends State<CourseScreen>
         }
 
         final userData = snapshot.data!.data() as Map<String, dynamic>?;
-
         final userName = userData?['name'] ?? 'Unknown User';
         final userProfileImageUrl = userData?['profileImageUrl'];
-
-        final isOwnerOrAdmin = feedback.userId.toString() == currentUser.id ||
-            isAdmin;
-
-        // Format date
+        final isOwnerOrAdmin = feedback.userId.toString() == currentUser.id || isAdmin;
         final formattedDate =
         DateFormat('yMMMd').format(feedback.date!.toDate());
-
-        // Highlight current user's feedback
         final isCurrentUserFeedback = feedback.userId.toString() == currentUser.id;
 
         return Card(
@@ -1626,7 +1779,6 @@ class _CourseScreenState extends State<CourseScreen>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Handle null ratings by providing a default value or hiding the RatingBar
                     if (feedback.rating != null)
                       RatingBarIndicator(
                         rating: feedback.rating!,
@@ -1681,7 +1833,7 @@ class _CourseScreenState extends State<CourseScreen>
   void _showEditFeedbackDialog(FeedBack feedback, String userName) {
     final TextEditingController _feedbackController =
     TextEditingController(text: feedback.feedback);
-    double _currentRating = feedback.rating ?? 3.0; // Safeguard against null
+    double _currentRating = feedback.rating ?? 3.0;
 
     showDialog(
       context: context,
@@ -1748,7 +1900,6 @@ class _CourseScreenState extends State<CourseScreen>
 
                     Navigator.pop(context);
 
-                    // Show success message
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Feedback updated successfully!'),
@@ -1756,7 +1907,6 @@ class _CourseScreenState extends State<CourseScreen>
                       ),
                     );
 
-                    // Refresh course data
                     await _initializeCourse();
                   } on FirebaseException catch (e) {
                     if (!mounted) return;
@@ -1766,8 +1916,7 @@ class _CourseScreenState extends State<CourseScreen>
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content:
-                        Text('Failed to update feedback: ${e.message}'),
+                        content: Text('Failed to update feedback: ${e.message}'),
                         backgroundColor: Colors.red,
                       ),
                     );
@@ -1779,8 +1928,7 @@ class _CourseScreenState extends State<CourseScreen>
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content:
-                        Text('Failed to update feedback: $e'),
+                        content: Text('Failed to update feedback: $e'),
                         backgroundColor: Colors.red,
                       ),
                     );
@@ -1802,7 +1950,6 @@ class _CourseScreenState extends State<CourseScreen>
 
   /// Deletes a specific feedback entry.
   void _deleteFeedback(String courseId, FeedBack feedback) async {
-    // Show a confirmation dialog before deletion
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -1824,10 +1971,9 @@ class _CourseScreenState extends State<CourseScreen>
       },
     );
 
-    // If the user confirms deletion, proceed with deletion
     if (shouldDelete == true) {
       setState(() {
-        _isSubmitting = true; // Start loading
+        _isSubmitting = true;
       });
       try {
         final courseProvider =
@@ -1836,13 +1982,11 @@ class _CourseScreenState extends State<CourseScreen>
             courseId, feedback.userId.toString());
 
         setState(() {
-          _isSubmitting = false; // End loading
+          _isSubmitting = false;
         });
 
-        // Refresh course data
         await _initializeCourse();
 
-        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Feedback deleted successfully.'),
@@ -1852,7 +1996,7 @@ class _CourseScreenState extends State<CourseScreen>
       } catch (e) {
         print("Error deleting feedback: $e");
         setState(() {
-          _isSubmitting = false; // End loading
+          _isSubmitting = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1909,7 +2053,6 @@ class _CourseScreenState extends State<CourseScreen>
               maxLines: 2,
             ),
             const SizedBox(height: 10),
-            // Star Rating Input
             Text(
               'Rate this course:',
               style: TextStyle(fontSize: 16, color: Colors.grey[700]),
@@ -1933,7 +2076,6 @@ class _CourseScreenState extends State<CourseScreen>
               },
             ),
             const SizedBox(height: 10),
-            // Display character limit below the text field
             Text(
               '${_feedbackController.text.length}/150 characters',
               style: TextStyle(color: Colors.grey[600]),
@@ -1953,11 +2095,10 @@ class _CourseScreenState extends State<CourseScreen>
                     user.name ?? 'Anonymous',
                     _feedbackController.text,
                     user.id!,
-                    _currentRating, // Pass the rating
+                    _currentRating,
                   );
                   _feedbackController.clear();
 
-                  // Show success or error message based on result
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
@@ -1975,7 +2116,6 @@ class _CourseScreenState extends State<CourseScreen>
                     _isSubmitting = false;
                   });
 
-                  // Refresh course data
                   await _initializeCourse();
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -2010,8 +2150,7 @@ class _CourseScreenState extends State<CourseScreen>
                   SizedBox(width: 8),
                   Text(
                     'Submit Feedback',
-                    style: TextStyle(
-                        fontSize: 16, color: Colors.white),
+                    style: TextStyle(fontSize: 16, color: Colors.white),
                   ),
                 ],
               ),
@@ -2024,7 +2163,6 @@ class _CourseScreenState extends State<CourseScreen>
 
   /// Builds the floating action button for adding feedback.
   FloatingActionButton? _buildFloatingActionButton() {
-    // Only show FAB to Admins or enrolled users
     return (isEnrolled || isAdmin)
         ? FloatingActionButton.extended(
       onPressed: () {
@@ -2040,16 +2178,15 @@ class _CourseScreenState extends State<CourseScreen>
 
   @override
   Widget build(BuildContext context) {
-
-if(_course == null) {
-  return SafeArea(child: SpinKitDoubleBounce(color: Colors.lightBlue,));
-}
+    if (_course == null) {
+      return SafeArea(child: SpinKitDoubleBounce(color: Colors.lightBlue));
+    }
     return SafeArea(
       child: YoutubePlayerBuilder(
         player: YoutubePlayer(
           controller: _youtubeController ??
               YoutubePlayerController(
-                initialVideoId: '', // Empty controller if not initialized
+                initialVideoId: '',
                 flags: const YoutubePlayerFlags(
                   autoPlay: false,
                   mute: false,
@@ -2099,15 +2236,11 @@ if(_course == null) {
                     icon: Icon(Icons.add, semanticLabel: 'Add Section'),
                     onPressed: () => _showAddSectionDialog(context),
                   ),
-                // Removed Unenroll Button from Admins as per requirement
               ],
             ),
             body: Column(
               children: [
-                // Video Player
-                if (_youtubeController != null &&
-                    (isEnrolled || isAdmin))
-                // Removed Hero widget to prevent conflicts
+                if (_youtubeController != null && (isEnrolled || isAdmin))
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16.0),
                     child: AspectRatio(
@@ -2115,8 +2248,7 @@ if(_course == null) {
                       child: player,
                     ),
                   )
-                else if (_course!.sections.first.videos.isNotEmpty)
-                // Show only first video for all users
+                else if (_course!.sections.isNotEmpty && _course!.sections.first.videos.isNotEmpty)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16.0),
                     child: AspectRatio(
@@ -2154,7 +2286,6 @@ if(_course == null) {
                     ),
                   ),
                 const SizedBox(height: 10),
-                // Tab Bar
                 TabBar(
                   controller: _tabController,
                   indicatorColor: const Color(0xFF3F51B5),
@@ -2172,7 +2303,6 @@ if(_course == null) {
                   ],
                 ),
                 const SizedBox(height: 10),
-                // Tab Views
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
@@ -2208,5 +2338,46 @@ if(_course == null) {
     final authProvider =
     Provider.of<AuthService>(context, listen: false);
     return authProvider.user?.role == 'Admin';
+  }
+}
+class PdfPreviewScreen extends StatelessWidget {
+  final String pdfUrl;
+  final String title;
+
+  const PdfPreviewScreen({Key? key, required this.pdfUrl, required this.title})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+        backgroundColor: Colors.blueAccent,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.download),
+            tooltip: 'Download PDF',
+            onPressed: () async {
+              final Uri uri = Uri.parse(pdfUrl);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Unable to launch PDF URL'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+          ),
+        ],
+      ),
+      body: PDF().cachedFromUrl(
+        pdfUrl,
+        placeholder: (progress) => Center(child: Text('$progress %')),
+        errorWidget: (error) => Center(child: Text('Error: $error')),
+      ),
+    );
   }
 }

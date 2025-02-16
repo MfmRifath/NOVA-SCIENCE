@@ -30,7 +30,8 @@ class _CourseManagementScreenState extends State<CourseManagementScreen> with Si
     super.initState();
     final courseProvider = Provider.of<CourseProvider>(context, listen: false);
     courseProvider.fetchCourses(); // Fetch courses on initialization
-    _tabController = TabController(length: 2, vsync: this);
+    // Update TabController length to 3.
+    _tabController = TabController(length: 3, vsync: this);
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.trim().toLowerCase();
@@ -95,13 +96,14 @@ class _CourseManagementScreenState extends State<CourseManagementScreen> with Si
     return Scaffold(
       appBar: AppBar(
         title: Text('Course Management'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(text: 'Free Courses'),
-            Tab(text: 'Premium Courses'),
-          ],
-        ),
+          bottom: TabBar(
+            controller: _tabController,
+            tabs: [
+              Tab(text: 'Free Courses'),
+              Tab(text: 'Premium Courses'),
+              Tab(text: 'Review Courses'),
+            ],
+          ),
         actions: [
           IconButton(
             icon: Icon(Icons.refresh),
@@ -150,6 +152,12 @@ class _CourseManagementScreenState extends State<CourseManagementScreen> with Si
                   context,
                   courseProvider.getPremiumCourses(),
                   'Premium Courses',
+                ),
+                // Review Courses Tab (courses not approved)
+                _buildCourseList(
+                  context,
+                  courseProvider.getReviewCourses(),
+                  'Review Courses',
                 ),
               ],
             ),
@@ -323,6 +331,8 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
   late TextEditingController subjectController;
   late TextEditingController instructorController;
   late TextEditingController durationController;
+  String? selectedMedium;
+  final List<String> mediums = ['Tamil', 'English', 'Sinhala'];
 
   String? selectedStatus;
   File? selectedImage;
@@ -344,6 +354,8 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
         TextEditingController(text: widget.course.instructor ?? '');
     durationController =
         TextEditingController(text: widget.course.duration?? '');
+    // Set the selected medium (default to the course value or the first option)
+    selectedMedium = widget.course.medium ?? mediums.first;
 
 
     selectedStatus = statuses.contains(widget.course.status)
@@ -390,6 +402,33 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
                   controller: instructorController,
                   label: 'Instructor',
                   hintText: 'Enter instructor name',
+                ),
+                const SizedBox(height: 16),
+
+                // Instructor Field
+                DropdownButtonFormField<String>(
+                  value: selectedMedium,
+                  decoration: InputDecoration(
+                    labelText: 'Medium',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: mediums.map((medium) {
+                    return DropdownMenuItem(
+                      value: medium,
+                      child: Text(medium),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      selectedMedium = value;
+                    });
+                  },
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please select a medium';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
 
@@ -514,6 +553,7 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
                     widget.course.imageUrl = imageUrl;
                     widget.course.instructor = instructorController.text;
                     widget.course.duration = durationController.text;
+                    widget.course.medium = selectedMedium;
 
 
                     await courseProvider.updateCourse(widget.course);
@@ -587,6 +627,8 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
   final TextEditingController subjectController = TextEditingController();
   final TextEditingController instructorController= TextEditingController();
   final TextEditingController durationController= TextEditingController();
+  String? selectedMedium;
+  final List<String> mediums = ['Tamil', 'English', 'Sinhala'];
 
   String? selectedStatus = 'free';
   File? selectedImage;
@@ -624,6 +666,31 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                     labelText: 'Course Title',
                     border: OutlineInputBorder(),
                   ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedMedium,
+                  decoration: InputDecoration(
+                    labelText: 'Course Medium',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: mediums.map((medium) {
+                    return DropdownMenuItem(
+                      value: medium,
+                      child: Text(medium),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      selectedMedium = value;
+                    });
+                  },
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please select a medium';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
 
@@ -758,7 +825,8 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                       status: selectedStatus,
                       subject: subjectController.text,
                       instructor: instructorController.text,
-                      duration: durationController.text
+                      duration: durationController.text,
+                        medium: selectedMedium
                     );
 
                     await courseProvider.sendNotificationToAllUsers(

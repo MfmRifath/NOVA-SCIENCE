@@ -162,8 +162,8 @@ class _SignInScreenState extends State<SignInScreen> {
                               child: Center(
                                 child: Image.asset(
                                   'assets/images/logo.png',
-                                  width: isLargeScreen ? 150 : 100,
-                                  height: isLargeScreen ? 150 : 100,
+                                  width: isLargeScreen ? 170 : 120,
+                                  height: isLargeScreen ? 170 : 120,
                                 ),
                               ),
                             ),
@@ -184,7 +184,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                 },
                                 child: Text(
                                   'Forgot Password?',
-                                  style: TextStyle(color: Colors.teal),
+                                  style: TextStyle(color:Color(0xFF722626)),
                                 ),
                               ),
                             ),
@@ -193,7 +193,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             _buildSignInButton(isLargeScreen),
                             SizedBox(height: 20),
                             // Social Login Buttons
-                            _buildSocialLoginButtons(isLargeScreen),
+                           // _buildSocialLoginButtons(isLargeScreen),
                             SizedBox(height: 20),
                             // Sign Up Option
                             _buildSignUpOption(),
@@ -226,10 +226,10 @@ class _SignInScreenState extends State<SignInScreen> {
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
-        prefixIcon: Icon(icon, color: Colors.teal),
+        prefixIcon: Icon(icon, color: Color(0xFF722626)),
         suffixIcon: isPassword
             ? IconButton(
-          icon: Icon(_obscureText ? Icons.visibility : Icons.visibility_off, color: Colors.teal),
+          icon: Icon(_obscureText ? Icons.visibility : Icons.visibility_off, color: Color(0xFF722626)),
           onPressed: () => setState(() => _obscureText = !_obscureText),
         )
             : null,
@@ -243,7 +243,7 @@ class _SignInScreenState extends State<SignInScreen> {
       onPressed: _isLoading ? null : _signInWithEmail,
       style: ElevatedButton.styleFrom(
         padding: EdgeInsets.symmetric(vertical: isLargeScreen ? 18 : 16),
-        backgroundColor: Colors.teal,
+        backgroundColor:Color(0xFF722626),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       child: _isLoading
@@ -287,7 +287,7 @@ class _SignInScreenState extends State<SignInScreen> {
             onPressed: () => Navigator.pushNamed(context, '/signUp'),
             child: Text(
               "Sign Up",
-              style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold),
+              style: TextStyle(color: Color(0xFF722626), fontWeight: FontWeight.bold),
             ),
           ),
         ],

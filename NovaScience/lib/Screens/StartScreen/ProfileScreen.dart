@@ -15,6 +15,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? userData;
   bool isLoading = true;
 
+  // Define color constants for a consistent look
+  final Color primaryColor = Colors.blueAccent; // Used for edit actions and accent elements
+  final Color dangerColor = Colors.redAccent;     // Used for sign out and delete actions
+  final Color infoCardColor = Colors.black.withOpacity(0.6); // Background for info cards
+
   @override
   void initState() {
     super.initState();
@@ -30,30 +35,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
       isLoading = false;
     });
   }
+
   Future<void> _deleteAccount() async {
     try {
       User? user = _authService.currentUser;
       if (user == null) return;
 
-      // Show progress indicator while deleting
       setState(() => isLoading = true);
 
-      // Delete user data from Firestore
+      // Delete user data from Firestore and Authentication
       await _authService.deleteUser();
-
-      // Delete user from Firebase Authentication
       await user.delete();
 
-      // Redirect to login page
+      // Redirect to join/login page
       Navigator.of(context).pushReplacementNamed('/join');
 
-      // Show confirmation message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Your account has been deleted successfully.")),
       );
     } catch (e) {
       print("Error deleting account: $e");
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to delete account. Please try again.")),
       );
@@ -61,15 +62,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => isLoading = false);
     }
   }
+
+  Future<void> _signOut() async {
+    await _authService.signOut();
+    Navigator.of(context).pushReplacementNamed('/join');
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isLargeScreen = screenWidth > 600;
+    final bool isLargeScreen = screenWidth > 600;
 
     return Scaffold(
       body: Stack(
         children: [
-          // Parallax Background
+          // Background Image with FadeIn animation
           Positioned.fill(
             child: FadeIn(
               duration: Duration(seconds: 1),
@@ -80,14 +87,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
 
-          // Gradient Overlay
+          // Gradient Overlay for improved contrast
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Colors.black.withOpacity(0.8),
-                  Colors.transparent,
-                  Colors.black.withOpacity(0.8)
+                  Colors.black.withOpacity(0.6),
+                  Colors.black.withOpacity(0.3),
+                  Colors.black.withOpacity(0.6),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -95,16 +102,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
 
-          // Main Content
+          // Main Content: either a loader or the scrollable profile content
           isLoading
-              ? Center(child: Pulse(child: CircularProgressIndicator(color: Colors.blue)))
+              ? Center(
+            child: Pulse(
+              child: CircularProgressIndicator(color: primaryColor),
+            ),
+          )
               : SingleChildScrollView(
             physics: BouncingScrollPhysics(),
             child: Column(
               children: [
-                SizedBox(height: 50),
+                SizedBox(height: 60),
 
-                // Profile Header
+                // Profile Header Section with animated appearance
                 ElasticIn(
                   duration: Duration(milliseconds: 800),
                   child: Column(
@@ -118,7 +129,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 SizedBox(height: 30),
 
-                // Action Buttons
+                // Action Buttons: Edit & Sign Out
                 FadeInLeft(
                   duration: Duration(milliseconds: 600),
                   child: _buildActionButtons(context),
@@ -126,7 +137,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 SizedBox(height: 40),
 
-                // Profile Info Cards
+                // Profile Information Cards
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: isLargeScreen ? 40 : 20),
                   child: ZoomIn(
@@ -155,30 +166,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileImage() {
     return BounceInDown(
       duration: Duration(milliseconds: 800),
-      child: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 15,
-              spreadRadius: 5,
-            )
-          ],
-        ),
-        child: CircleAvatar(
-          radius: 70,
-          backgroundImage: NetworkImage(userData?["profileImageUrl"] ?? "https://via.placeholder.com/150"),
-          child: Align(
-            alignment: Alignment.bottomRight,
+      child: GestureDetector(
+        onTap: () {
+          // Implement profile image editing functionality here, if desired.
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 15,
+                spreadRadius: 5,
+              )
+            ],
+          ),
+          child: ClipOval(
             child: Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade800,
-                shape: BoxShape.circle,
+              width: 140,
+              height: 140,
+              // Check if the profileImageUrl exists; if not, use the local asset.
+              child: userData?["profileImageUrl"] != null
+                  ? Image.network(
+                userData!["profileImageUrl"],
+                fit: BoxFit.cover,
+                // If the network image fails, use a local placeholder.
+                errorBuilder: (context, error, stackTrace) {
+                  return Image.asset(
+                    'assets/images/logo.png',
+                    fit: BoxFit.cover,
+                  );
+                },
+              )
+                  : Image.asset(
+                'assets/images/logo.png',
+                fit: BoxFit.cover,
               ),
-              child: Icon(Icons.edit, color: Colors.white, size: 20),
             ),
           ),
         ),
@@ -193,7 +217,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Text(
             userData?['name'] ?? 'John Doe',
             style: TextStyle(
-              fontSize: 32,
+              fontSize: 28,
               fontWeight: FontWeight.bold,
               color: Colors.white,
               letterSpacing: 1.1,
@@ -205,7 +229,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Text(
             userData?['bio'] ?? 'Flutter Enthusiast',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               color: Colors.white70,
               fontStyle: FontStyle.italic,
             ),
@@ -222,21 +246,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _buildProfileButton(
           icon: Icons.edit,
           label: "Edit",
-          color: Colors.amber,
+          color: primaryColor,
           onTap: () => Navigator.pushNamed(context, '/editProfile'),
         ),
         SizedBox(width: 20),
         _buildProfileButton(
           icon: Icons.logout,
           label: "Sign Out",
-          color: Colors.redAccent,
+          color: dangerColor,
           onTap: _signOut,
         ),
       ],
     );
   }
 
-  Widget _buildProfileButton({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+  Widget _buildProfileButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
     return ElasticIn(
       duration: Duration(milliseconds: 500),
       child: Tooltip(
@@ -273,10 +302,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildProfileInfoCards() {
     return Container(
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
+        color: infoCardColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black45,
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -324,7 +360,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildDivider() {
     return Divider(
-      color: Colors.white.withOpacity(0.1),
+      color: Colors.white.withOpacity(0.2),
       height: 1,
       indent: 20,
       endIndent: 20,
@@ -335,11 +371,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Tooltip(
       message: "Permanently delete your account",
       child: TextButton.icon(
-        icon: Icon(Icons.delete_forever, color: Colors.red.shade300),
+        icon: Icon(Icons.delete_forever, color: dangerColor.withOpacity(0.9)),
         label: Text(
           "Delete Account",
           style: TextStyle(
-            color: Colors.red.shade300,
+            color: dangerColor.withOpacity(0.9),
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -349,7 +385,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
           ),
-          backgroundColor: Colors.red.withOpacity(0.1),
+          backgroundColor: dangerColor.withOpacity(0.1),
         ),
       ),
     );
@@ -359,18 +395,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            Icon(Icons.warning_amber_rounded, color: dangerColor),
             SizedBox(width: 10),
-            Text("Delete Account", style: TextStyle(color: Colors.red)),
+            Text("Delete Account", style: TextStyle(color: dangerColor)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("This action will:", style: TextStyle(fontWeight: FontWeight.w500)),
+            Text("This action will:", style: TextStyle(fontWeight: FontWeight.w500, color: Colors.white70)),
             SizedBox(height: 10),
             _buildDeleteConsequence(Icons.delete, "Permanently remove all your data"),
             _buildDeleteConsequence(Icons.block, "Disable all associated services"),
@@ -383,7 +420,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Text("Cancel", style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: dangerColor),
             onPressed: () {
               Navigator.pop(context);
               _deleteAccount();
@@ -400,71 +437,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.red.shade300),
+          Icon(icon, size: 18, color: dangerColor.withOpacity(0.9)),
           SizedBox(width: 10),
-          Text(text, style: TextStyle(color: Colors.red.shade300)),
+          Text(text, style: TextStyle(color: dangerColor.withOpacity(0.9))),
         ],
       ),
     );
   }
 
-
-  // Profile Info List
-  Widget _buildProfileInfoList() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildProfileInfoItem(Icons.email, "Email", userData?['email'] ?? "johndoe@example.com"),
-          const Divider(color: Colors.white54),
-          _buildProfileInfoItem(Icons.phone, "Phone", userData?['phoneNumber'] ?? "+123 456 7890"),
-          const Divider(color: Colors.white54),
-          _buildProfileInfoItem(Icons.location_on, "Location", userData?['location'] ?? "San Francisco, CA"),
-          const Divider(color: Colors.white54),
-          _buildProfileInfoItem(
-            Icons.cake,
-            "Birthday",
-            userData?['birthday'] != null && userData?['birthday'] is Timestamp
-                ? _formatTimestamp(userData!['birthday'])
-                : "January 1, 1990",
-          ),
-          const Divider(color: Colors.white54),
-        ],
-      ),
-    );
-  }
   String _formatTimestamp(Timestamp timestamp) {
     final DateTime date = timestamp.toDate();
-    return "${date.day}-${date.month}-${date.year}"; // Format as DD-MM-YYYY
-  }
-
-  // Profile Info Item
-  Widget _buildProfileInfoItem(IconData icon, String title, String info) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.white),
-      title: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: Colors.white70,
-        ),
-      ),
-      subtitle: Text(
-        info,
-        style: const TextStyle(
-          fontSize: 14,
-          color: Colors.white60,
-        ),
-      ),
-      contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
-    );
-  }
-
-  // Sign Out Functionality
-  Future<void> _signOut() async {
-    await _authService.signOut();
-    Navigator.of(context).pushReplacementNamed('/join');
+    return "${date.day}-${date.month}-${date.year}";
   }
 }

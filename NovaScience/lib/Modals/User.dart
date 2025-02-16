@@ -30,17 +30,21 @@ class CustomUser {
   });
 
   factory CustomUser.fromMap(Map<String, dynamic> data, String documentId) {
+    // Debug print: log the raw data retrieved from Firestore.
+    print('Creating CustomUser from data: $data with id: $documentId');
+
     return CustomUser(
       id: documentId,
-      name: data['name'],
-      email: data['email'],
-      profileImageUrl: data['profileImageUrl'],
-      role: data['role'],
-      phoneNumber: data['phoneNumber'],
-      location: data['location'],
+      // Explicitly cast the value to String?
+      name: data['name'] as String?,
+      email: data['email'] as String?,
+      profileImageUrl: data['profileImageUrl'] as String?,
+      role: data['role'] as String?,
+      phoneNumber: data['phoneNumber'] as String?,
+      location: data['location'] as String?,
       birthday: data['birthday'] != null ? (data['birthday'] as Timestamp).toDate() : null,
-      bio: data['bio'],
-      isLoggedin: data['isLoggedin'],
+      bio: data['bio'] as String?,
+      isLoggedin: data['isLoggedin'] as bool?,
       registeredDate: data['registeredDate'] != null ? (data['registeredDate'] as Timestamp).toDate() : null,
       enrollments: convertEnrollments(data['enrolledCourses']),
     );
@@ -57,6 +61,7 @@ class CustomUser {
       }
     }).toList();
   }
+
   Map<String, dynamic> toMap() {
     return {
       'name': name,
@@ -72,9 +77,6 @@ class CustomUser {
       'enrolledCourses': enrollments?.map((e) => e.toMap()).toList() ?? [],
     };
   }
-
-  /// **Public method to convert Firestore enrollments**
-
 }
 
 class Enrollment {
@@ -90,7 +92,7 @@ class Enrollment {
 
   factory Enrollment.fromMap(Map<String, dynamic> data) {
     return Enrollment(
-      courseId: data['courseId'],
+      courseId: data['courseId'] as String,
       enrollmentDate: (data['enrollmentDate'] as Timestamp).toDate(),
       endDate: (data['enrollmentEndDate'] as Timestamp).toDate(),
     );

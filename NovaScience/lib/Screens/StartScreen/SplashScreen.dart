@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:nova_science/Screens/StartScreen/HomePage.dart';
 import 'onboardingScreen.dart';
+import 'homeScreen.dart'; // Ensure you have a HomeScreen widget
 
 class SplashScreen extends StatefulWidget {
   @override
@@ -10,58 +13,89 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  // Durations and delays for animations
   final _duration = Duration(milliseconds: 1500);
   final _delay = Duration(milliseconds: 300);
 
-  void _navigateToOnboarding() {
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        transitionDuration: Duration(milliseconds: 1200),
-        pageBuilder: (_, __, ___) => OnboardingScreen(),
-        transitionsBuilder: (_, animation, __, child) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: Offset(0.0, 0.2),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.fastOutSlowIn,
-              )),
-              child: child,
-            ),
-          );
-        },
-      ),
-    );
+  // This function checks if the user is signed in.
+  // If yes, navigate to HomeScreen; if not, navigate to OnboardingScreen.
+  void _navigateToNextScreen() {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      // User is signed in, navigate to HomeScreen.
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          transitionDuration: Duration(milliseconds: 1200),
+          pageBuilder: (_, __, ___) => HomePage(),
+          transitionsBuilder: (_, animation, __, child) {
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: Offset(0.0, 0.2),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.fastOutSlowIn,
+                )),
+                child: child,
+              ),
+            );
+          },
+        ),
+      );
+    } else {
+      // No user is signed in, navigate to OnboardingScreen.
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          transitionDuration: Duration(milliseconds: 1200),
+          pageBuilder: (_, __, ___) => OnboardingScreen(),
+          transitionsBuilder: (_, animation, __, child) {
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: Offset(0.0, 0.2),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.fastOutSlowIn,
+                )),
+                child: child,
+              ),
+            );
+          },
+        ),
+      );
+    }
   }
 
   @override
   void initState() {
     super.initState();
-    Timer(Duration(seconds: 5), _navigateToOnboarding);
+    // After 5 seconds, check user status and navigate accordingly.
+    Timer(Duration(seconds: 5), _navigateToNextScreen);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Parallax Background
+          // Gradient background with fade animation.
           Positioned.fill(
             child: FadeIn(
               duration: _duration,
               child: Container(
                 decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/images/background.jpg'),
-                    fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(
-                      Colors.black.withOpacity(0.6),
-                      BlendMode.darken,
-                    ),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF11261F), // Dark teal
+                      Color(0xFF123755), // Deep blue
+                      Color(0xFF722626), // Maroon
+                    ],
                   ),
                 ),
               ),
@@ -72,11 +106,10 @@ class _SplashScreenState extends State<SplashScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo with combined animations
+                // Logo animation.
                 ElasticInLeft(
                   delay: _delay,
                   duration: _duration,
-                   // Add scale here instead of ScaleIn
                   child: SlideInUp(
                     delay: _delay,
                     from: 100,
@@ -84,19 +117,18 @@ class _SplashScreenState extends State<SplashScreen> {
                       'assets/images/logo.png',
                       width: 200,
                       height: 200,
-
                     ),
                   ),
                 ),
 
                 SizedBox(height: 40),
 
-                // Text animation
+                // Animated tagline.
                 FadeInDown(
                   delay: _delay * 2,
                   from: 30,
                   child: Text(
-                    'Lighting the Way of Science',
+                    'A New Way of Learning.',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w300,
@@ -117,7 +149,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
                 SizedBox(height: 50),
 
-                // Loading indicator with pulse effect
+                // Loading indicator with pulse effect.
                 Pulse(
                   infinite: true,
                   child: SpinKitFadingFour(
