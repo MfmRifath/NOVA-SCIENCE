@@ -64,7 +64,7 @@ class CustomUser {
 
   Map<String, dynamic> toMap() {
     return {
-      'name': name,
+      'name': name ,
       'email': email,
       'profileImageUrl': profileImageUrl,
       'role': role,

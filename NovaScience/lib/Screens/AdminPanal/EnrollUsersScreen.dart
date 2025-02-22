@@ -104,8 +104,17 @@ class _EnrollUsersScreenState extends State<EnrollUsersScreen> {
                             border: OutlineInputBorder(),
                           ),
                         ),
+                        itemBuilder: (context, item, isSelected) {
+                          return ListTile(
+                            title: Text(item['courseTitle'] ?? 'Untitled Course'),
+                            subtitle: Text(
+                              'Medium: ${item['medium'] ?? 'N/A'}\nInstructor: ${item['instructor'] ?? 'N/A'}',
+                            ),
+                          );
+                        },
                       ),
-                      itemAsString: (item) => item['courseTitle'] ?? 'Untitled Course',
+                      itemAsString: (item) =>
+                      '${item['courseTitle']} - ${item['medium']} - ${item['instructor']}',
                       onChanged: (value) {
                         setState(() {
                           selectedCourseId = value?['id'];
@@ -202,16 +211,20 @@ class _EnrollUsersScreenState extends State<EnrollUsersScreen> {
     final querySnapshot = await FirebaseFirestore.instance.collection('users').get();
     return querySnapshot.docs
         .map((doc) => {'id': doc.id, ...doc.data() as Map<String, dynamic>})
-        .where((user) => user['name'] != null && user['name'].toLowerCase().contains(filter.toLowerCase()))
+        .where((user) => user['email'] != null && user['email'].toLowerCase().contains(filter.toLowerCase()))
         .toList();
   }
 
-  // Fetch courses from Firestore
   Future<List<Map<String, dynamic>>> _fetchCourses(String filter) async {
     final querySnapshot = await FirebaseFirestore.instance.collection('courses').get();
     return querySnapshot.docs
-        .map((doc) => {'id': doc.id, ...doc.data() as Map<String, dynamic>})
-        .where((course) => course['courseTitle'] != null && course['courseTitle'].toLowerCase().contains(filter.toLowerCase()))
+        .map((doc) => {
+      'id': doc.id,
+      'courseTitle': doc.data()['courseTitle'] ?? 'Untitled Course',
+      'medium': doc.data()['medium'] ?? 'N/A',
+      'instructor': doc.data()['instructor'] ?? 'N/A',
+    })
+        .where((course) => course['courseTitle'].toLowerCase().contains(filter.toLowerCase()))
         .toList();
   }
 

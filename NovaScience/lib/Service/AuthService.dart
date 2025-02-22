@@ -63,7 +63,7 @@ class AuthService with ChangeNotifier {
 
       _user = CustomUser(
         id: userCredential.user!.uid,
-        name: name,
+        name: name as String?,
         email: email,
         role: 'User',
         profileImageUrl: '',
@@ -253,7 +253,6 @@ class AuthService with ChangeNotifier {
       // Optionally, handle errors by rethrowing or using another mechanism
     }
   }
-
   /// Retrieves the current user's email.
   Future<String?> getCurrentUserEmail() async {
     User? user = _auth.currentUser;

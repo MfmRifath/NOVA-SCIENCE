@@ -144,7 +144,18 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
                   },
                 ),
               ),
-
+              Card(
+                color: Colors.purple[50],
+                child: ListTile(
+                  leading: Icon(Icons.settings, color: Colors.purple),
+                  title: Text('All Terachers Payment Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  subtitle: Text('See all Payment Details.'),
+                  trailing: Icon(Icons.arrow_forward_ios),
+                  onTap: () {
+                    Navigator.pushNamed(context, '/teachersPayment');
+                  },
+                ),
+              ),
               SizedBox(height: 20),
 
               // Logout Button

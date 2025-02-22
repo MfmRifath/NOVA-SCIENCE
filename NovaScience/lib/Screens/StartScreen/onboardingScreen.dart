@@ -21,25 +21,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       img: 'start1',
       heading: 'Embark on a Journey to Excellence',
       description:
-      'Welcome to NOVA SCIENCE! Your guide to mastering A/L Science and O/L Maths and Science. Access expert resources to excel in your studies. Start your journey to academic success today!',
+      'Welcome to NOVA LEARN! Your guide to mastering A/L Subjects and O/L Subjects. Access expert resources to excel in your studies. Start your journey to academic success today!',
     ),
     Startscreen(
       img: 'start2',
       heading: 'Explore the World of Knowledge',
       description:
-      'Welcome to NOVA SCIENCE! Discover resources for A/L Science and O/L Maths and Science. Access interactive lessons and expert insights to excel in your exams.',
+      'Welcome to NOVA LEARN! Discover resources for A/L Science and O/L Maths and Science. Access interactive lessons and expert insights to excel in your exams.',
     ),
     Startscreen(
       img: 'start3',
-      heading: 'Unlock Your Potential with NOVA SCIENCE!',
+      heading: 'Unlock Your Potential with NOVA LEARN!',
       description:
-      'At NOVA SCIENCE, we believe in your potential. Our tailored resources for A/L Science and O/L Maths and Science will help you unlock your capabilities. Dive into our lessons and achieve academic success!',
+      'At NOVA LEARN, we believe in your potential. Our tailored resources for A/L Subjects and O/L Subjects will help you unlock your capabilities. Dive into our lessons and achieve academic success!',
     ),
     Startscreen(
       img: 'start4',
       heading: 'Begin Your Path to Academic Excellence',
       description:
-      'NOVA SCIENCE guides your academic journey with a focus on A/L Science and O/L Maths and Science. Equip yourself with the knowledge and tools to master your subjects and excel in your exams. Start today!',
+      'NOVA LEARN guides your academic journey with a focus on A/L Subjects and O/L Subjects. Equip yourself with the knowledge and tools to master your subjects and excel in your exams. Start today!',
     ),
   ];
 

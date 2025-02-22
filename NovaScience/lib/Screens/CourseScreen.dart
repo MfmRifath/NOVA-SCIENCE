@@ -1069,18 +1069,16 @@ class _CourseScreenState extends State<CourseScreen>
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          final Uri smsUri = Uri(
-                            scheme: 'sms',
-                            path: adminPhoneNumber,
-                            queryParameters: <String, String>{
-                              'body':
-                              'I want to enroll in the course ${_course?.courseTitle ?? 'Unknown'}',
-                            },
-                          );
-                          if (await canLaunchUrl(smsUri)) {
-                            await launchUrl(smsUri);
+                          // Remove the '+' from the admin phone number for WhatsApp URL formatting.
+                          final String whatsappNumber = adminPhoneNumber.replaceAll('+', '');
+                          final String message =
+                              'I want to enroll in the course ${_course!.courseTitle ?? 'Unknown'}. The Instructor Of the Course is ${_course!.instructor ?? "Unknown"}';
+                          final Uri whatsappUrl = Uri.parse(
+                              "https://wa.me/$whatsappNumber?text=${Uri.encodeComponent(message)}");
+                          if (await canLaunchUrl(whatsappUrl)) {
+                            await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
                           } else {
-                            _showErrorSnackbar('Could not launch SMS app.');
+                            _showErrorSnackbar('Could not launch WhatsApp.');
                           }
                         },
                         icon: const Icon(Icons.message),

@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:nova_science/Screens/AdminPanal/EnrollUsersScreen.dart';
 import 'package:nova_science/Screens/AdminPanal/ManageAdvertisementsScreen.dart';
+import 'package:nova_science/Screens/AdminPanal/TeacherPaymentsScreen.dart';
 import 'package:nova_science/Screens/StartScreen/ForgertPasswordScreen.dart';
 import 'package:nova_science/Screens/StartScreen/HomeScreen.dart';
 import 'package:nova_science/Screens/StartScreen/NotificationScreen.dart';
@@ -74,6 +75,7 @@ class Routes {
   static const String notifications = '/notifications';
   static const String manageAdvertisements = '/manageAdvertisements';
   static const String forgetPassword = '/forgotPassword';
+  static const String teachersPayments = '/teachersPayment';
 
 }
 
@@ -140,6 +142,9 @@ class NovaScience extends StatelessWidget {
             break;
           case Routes.manageAdvertisements :
             builder = (context) => ManageAdvertisementsScreen();
+            break;
+          case Routes.teachersPayments :
+            builder = (context) => TeacherPaymentsScreen();
             break;
            // Optional: break here for clarity
           case Routes.forgetPassword :
