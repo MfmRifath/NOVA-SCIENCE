@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:animate_do/animate_do.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   @override
@@ -19,7 +20,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
       vsync: this,
     );
     _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
-
     _controller.forward(); // Start the animation
   }
 
@@ -29,149 +29,154 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
     super.dispose();
   }
 
+  Widget _buildAdminCard({
+    required Color cardColor,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return FadeInUp(
+      duration: const Duration(milliseconds: 800),
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: cardColor,
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        child: ListTile(
+          contentPadding: const EdgeInsets.all(16),
+          leading: CircleAvatar(
+            radius: 24,
+            backgroundColor: Colors.white,
+            child: Icon(icon, color: cardColor, size: 28),
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          subtitle: Text(subtitle, style: const TextStyle(fontSize: 14)),
+          trailing: const Icon(Icons.arrow_forward_ios, size: 20),
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: ListView(
-            children: [
-              // Dashboard Overview
-              Card(
-                color: Colors.blue[50],
-                child: ListTile(
-                  leading: Icon(Icons.dashboard, color: Colors.blue),
-                  title: Text('Dashboard Overview', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  subtitle: Text('View key metrics and activity logs.'),
-                  trailing: Icon(Icons.arrow_forward_ios),
-                  onTap: () {
-                    Navigator.pushNamed(context, '/dashboardOverview');
-                  },
-                ),
+      // A gradient background gives a modern look.
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.blue.shade50, Colors.white],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20),
+              child: ListView(
+                children: [
+                  Text(
+                    'Admin Panel',
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildAdminCard(
+                    cardColor: Colors.blue[50]!,
+                    icon: Icons.dashboard,
+                    title: 'Dashboard Overview',
+                    subtitle: 'View key metrics and activity logs.',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/dashboardOverview');
+                    },
+                  ),
+                  _buildAdminCard(
+                    cardColor: Colors.green[50]!,
+                    icon: Icons.people,
+                    title: 'User Management',
+                    subtitle: 'Manage users, roles, and permissions.',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/userManagement');
+                    },
+                  ),
+                  _buildAdminCard(
+                    cardColor: Colors.orange[50]!,
+                    icon: Icons.book,
+                    title: 'Course Management',
+                    subtitle: 'Add, update, or remove courses.',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/courseManagement');
+                    },
+                  ),
+                  _buildAdminCard(
+                    cardColor: Colors.teal[50]!,
+                    icon: Icons.school,
+                    title: 'Enroll Users into Courses',
+                    subtitle: 'Assign courses to users.',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/enrollUsers');
+                    },
+                  ),
+                  _buildAdminCard(
+                    cardColor: Colors.red[50]!,
+                    icon: Icons.analytics,
+                    title: 'Reports & Analytics',
+                    subtitle: 'View reports and analytics.',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/reports');
+                    },
+                  ),
+                  _buildAdminCard(
+                    cardColor: Colors.purple[50]!,
+                    icon: Icons.settings,
+                    title: 'Settings',
+                    subtitle: 'Configure system settings.',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/systemSettings');
+                    },
+                  ),
+                  _buildAdminCard(
+                    cardColor: Colors.purple[50]!,
+                    icon: Icons.campaign,
+                    title: 'Manage Advertisement',
+                    subtitle: 'Add, edit, or delete advertisements.',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/manageAdvertisements');
+                    },
+                  ),
+                  _buildAdminCard(
+                    cardColor: Colors.purple[50]!,
+                    icon: Icons.payment,
+                    title: 'All Teachers Payment Details',
+                    subtitle: 'View all payment details.',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/teachersPayment');
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      // Handle logout action here.
+                    },
+                    icon: const Icon(Icons.logout),
+                    label: const Text('Logout'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
               ),
-
-              SizedBox(height: 10),
-
-              // User Management Section
-              Card(
-                color: Colors.green[50],
-                child: ListTile(
-                  leading: Icon(Icons.people, color: Colors.green),
-                  title: Text('User Management', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  subtitle: Text('Manage users, roles, and permissions.'),
-                  trailing: Icon(Icons.arrow_forward_ios),
-                  onTap: () {
-                    Navigator.pushNamed(context, '/userManagement');
-                  },
-                ),
-              ),
-
-              SizedBox(height: 10),
-
-              // Course Management Section
-              Card(
-                color: Colors.orange[50],
-                child: ListTile(
-                  leading: Icon(Icons.book, color: Colors.orange),
-                  title: Text('Course Management', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  subtitle: Text('Add, update, or remove courses.'),
-                  trailing: Icon(Icons.arrow_forward_ios),
-                  onTap: () {
-                    Navigator.pushNamed(context, '/courseManagement');
-                  },
-                ),
-              ),
-// Enrollment Section
-              SizedBox(height: 10),
-              Card(
-                color: Colors.teal[50],
-                child: ListTile(
-                  leading: Icon(Icons.school, color: Colors.teal),
-                  title: Text('Enroll Users into Courses', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  subtitle: Text('Assign courses to users.'),
-                  trailing: Icon(Icons.arrow_forward_ios),
-                  onTap: () {
-                    Navigator.pushNamed(context, '/enrollUsers');
-                  },
-                ),
-              ),
-              SizedBox(height: 10),
-
-              // Reports and Analytics
-              Card(
-                color: Colors.red[50],
-                child: ListTile(
-                  leading: Icon(Icons.analytics, color: Colors.red),
-                  title: Text('Reports & Analytics', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  subtitle: Text('View reports and analytics.'),
-                  trailing: Icon(Icons.arrow_forward_ios),
-                  onTap: () {
-                    Navigator.pushNamed(context, '/reports');
-                  },
-                ),
-              ),
-
-              SizedBox(height: 10),
-
-              // Settings Section
-              Card(
-                color: Colors.purple[50],
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Colors.purple),
-                  title: Text('Settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  subtitle: Text('Configure system settings.'),
-                  trailing: Icon(Icons.arrow_forward_ios),
-                  onTap: () {
-                    Navigator.pushNamed(context, '/systemSettings');
-                  },
-                ),
-              ),
-              SizedBox(height: 10),
-
-              // Settings Section
-              Card(
-                color: Colors.purple[50],
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Colors.purple),
-                  title: Text('Manage Advertisement', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  subtitle: Text('Add, edite, Delete Advertisments.'),
-                  trailing: Icon(Icons.arrow_forward_ios),
-                  onTap: () {
-                    Navigator.pushNamed(context, '/manageAdvertisements');
-                  },
-                ),
-              ),
-              Card(
-                color: Colors.purple[50],
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Colors.purple),
-                  title: Text('All Terachers Payment Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  subtitle: Text('See all Payment Details.'),
-                  trailing: Icon(Icons.arrow_forward_ios),
-                  onTap: () {
-                    Navigator.pushNamed(context, '/teachersPayment');
-                  },
-                ),
-              ),
-              SizedBox(height: 20),
-
-              // Logout Button
-              ElevatedButton.icon(
-                onPressed: () {
-                  // Handle logout action
-                },
-                icon: Icon(Icons.logout),
-                label: Text('Logout'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  textStyle: TextStyle(fontSize: 16),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

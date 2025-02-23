@@ -1,5 +1,4 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -10,8 +9,8 @@ class CourseCard extends StatelessWidget {
   final String imageUrl;
   final String subject;
   final String id;
-  final double? rating; // Nullable for loading state
-  final int? enrolledCount; // Nullable for loading state
+  final double? rating; // Nullable for loading state.
+  final int? enrolledCount; // Nullable for loading state.
   final VoidCallback onTap;
 
   const CourseCard({
@@ -29,10 +28,9 @@ class CourseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Use LayoutBuilder to obtain available width
+    // Use LayoutBuilder to determine responsive sizes.
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Derive responsive sizes based on card width.
         final double cardWidth = constraints.maxWidth;
         final double horizontalPadding = cardWidth * 0.05;
         final double imageHeight = cardWidth * 0.6;
@@ -40,40 +38,33 @@ class CourseCard extends StatelessWidget {
         final double infoFontSize = cardWidth * 0.08;
         final double iconSize = cardWidth * 0.06;
 
-        return GestureDetector(
-          onTap: onTap,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(15),
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 6,
-                  offset: Offset(0, 3),
-                ),
-              ],
-            ),
+        return Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          elevation: 4,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(15),
+            onTap: onTap,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Course Image
+                // Course Image with a gradient overlay.
                 _buildCourseImage(imageHeight),
                 Padding(
                   padding: EdgeInsets.all(horizontalPadding),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Course Title
+                      // Course Title.
                       _buildCourseTitle(titleFontSize),
                       SizedBox(height: cardWidth * 0.03),
-                      // Instructor
+                      // Instructor.
                       _buildInstructor(infoFontSize),
                       SizedBox(height: cardWidth * 0.02),
-                      // Subject
+                      // Subject.
                       _buildSubject(infoFontSize),
                       SizedBox(height: cardWidth * 0.01),
-                      // Course Info Row
+                      // Course Info Row.
                       _buildCourseInfoRow(iconSize, infoFontSize),
                     ],
                   ),
@@ -89,20 +80,36 @@ class CourseCard extends StatelessWidget {
   Widget _buildCourseImage(double height) {
     return ClipRRect(
       borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
-      child: CachedNetworkImage(
-        imageUrl: imageUrl.isNotEmpty ? imageUrl : 'https://via.placeholder.com/150',
-        height: height,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Shimmer.fromColors(
-          baseColor: Colors.grey.shade300,
-          highlightColor: Colors.grey.shade100,
-          child: Container(color: Colors.white),
-        ),
-        errorWidget: (context, url, error) => Container(
-          color: Colors.grey.shade200,
-          child: Icon(Icons.error, color: Colors.red),
-        ),
+      child: Stack(
+        children: [
+          CachedNetworkImage(
+            imageUrl: imageUrl.isNotEmpty ? imageUrl : 'https://via.placeholder.com/150',
+            height: height,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Shimmer.fromColors(
+              baseColor: Colors.grey.shade300,
+              highlightColor: Colors.grey.shade100,
+              child: Container(color: Colors.white),
+            ),
+            errorWidget: (context, url, error) => Container(
+              color: Colors.grey.shade200,
+              child: Icon(Icons.error, color: Colors.red),
+            ),
+          ),
+          // Optional gradient overlay to enhance readability if needed.
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.transparent, Colors.black26],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -144,7 +151,7 @@ class CourseCard extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Time info
+        // Time info.
         Row(
           children: [
             Icon(Icons.access_time, size: iconSize, color: Colors.grey),
@@ -155,7 +162,7 @@ class CourseCard extends StatelessWidget {
             ),
           ],
         ),
-        // Rating & Enrollment
+        // Rating & Enrollment indicators.
         Row(
           children: [
             _buildRatingIndicator(iconSize, fontSize),

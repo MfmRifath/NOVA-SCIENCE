@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'package:animate_do/animate_do.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:liquid_pull_to_refresh/liquid_pull_to_refresh.dart';
 import 'package:nova_science/Screens/AddCourseScreen.dart';
 import 'package:provider/provider.dart';
@@ -31,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _selectedMedium = "All";
   final List<String> _mediumOptions = ["All", "Tamil", "English", "Sinhala"];
 
-  // Custom Colors
+  // Custom Colors – adjust these to match your branding.
   final Color greenColor = const Color(0xFF11261f);
   final Color yellowColor = const Color(0xFF123755);
   final Color maroonColor = const Color(0xFF722626);
@@ -68,33 +68,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ?.then((value) => value ?? <QueryDocumentSnapshot<Object?>>[])
         ?? <QueryDocumentSnapshot<Object?>>[];
 
-    // Filter approved courses
+    // Filter approved courses.
     final approvedCourses = courses.where((course) {
       final data = course.data() as Map<String, dynamic>?;
       return data?['isApproved'] == true;
     }).toList();
 
-    // Debug logging
+    // Debug logging.
     approvedCourses.forEach((course) {
       final data = course.data() as Map<String, dynamic>?;
       print("Approved course: ${data?['courseTitle']} - Medium: ${data?['medium']}");
     });
 
-    // Filter by search query
+    // Filter by search query.
     List<QueryDocumentSnapshot<Object?>> filtered = _searchQuery.isEmpty
         ? approvedCourses
         : approvedCourses.where((course) {
       final data = course.data() as Map<String, dynamic>?;
       final title = data?['courseTitle']?.toString().toLowerCase() ?? '';
-      final instructor =
-          data?['instructor']?.toString().toLowerCase() ?? '';
+      final instructor = data?['instructor']?.toString().toLowerCase() ?? '';
       final subject = data?['subject']?.toString().toLowerCase() ?? '';
       return title.contains(_searchQuery) ||
           instructor.contains(_searchQuery) ||
           subject.contains(_searchQuery);
     }).toList();
 
-    // Filter by medium if not "All"
+    // Filter by medium if not "All".
     if (_selectedMedium != "All") {
       filtered = filtered.where((course) {
         final data = course.data() as Map<String, dynamic>?;
@@ -104,7 +103,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         return medium.toLowerCase() == _selectedMedium.toLowerCase();
       }).toList();
     }
-
     return filtered;
   }
 
@@ -178,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               showChildOpacityTransition: false,
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  // Set grid parameters based on available width
+                  // Responsive grid parameters based on available width.
                   double width = constraints.maxWidth;
                   int gridCount;
                   double padding;
@@ -213,9 +211,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   }
                   return CustomScrollView(
                     slivers: [
+                      SliverAppBar(
+                        backgroundColor: yellowColor,
+                        expandedHeight: 180,
+                        pinned: true,
+                        flexibleSpace: FlexibleSpaceBar(
+                          centerTitle: true,
+                          title: Text("Welcome Back!"),
+                          background: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [greenColor, yellowColor, maroonColor],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                ),
+                              ),
+                              // Center a logo above the title.
+                              Align(
+                                alignment: Alignment.center,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 30.0),
+                                  child: Image.asset(
+                                    'assets/images/logo.png',
+                                    height: 80,
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                       SliverPadding(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: padding, vertical: 20),
+                        padding: EdgeInsets.symmetric(horizontal: padding, vertical: 20),
                         sliver: SliverList(
                           delegate: SliverChildListDelegate([
                             _buildFilterRow(),
@@ -244,10 +276,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       children: [
         _buildSectionHeader("My Learning", Icons.school, fontSize),
         _buildMyCoursesSection(courseProvider, gridCount, aspectRatio),
-        _buildSectionHeader("Free Courses", Icons.video_library, fontSize),
-        _buildCoursesGrid(courseProvider.getFreeCourses(), gridCount, aspectRatio),
         _buildSectionHeader("Premium Courses", Icons.workspace_premium, fontSize),
         _buildCoursesGrid(courseProvider.getPremiumCourses(), gridCount, aspectRatio),
+        _buildSectionHeader("Free Courses", Icons.video_library, fontSize),
+        _buildCoursesGrid(courseProvider.getFreeCourses(), gridCount, aspectRatio),
       ],
     );
   }
@@ -281,15 +313,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         color: Colors.white,
         borderRadius: BorderRadius.circular(30),
         border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade200,
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          )
+        ],
       ),
       child: TextField(
         controller: _searchController,
         decoration: InputDecoration(
           hintText: 'Search courses...',
-          prefixIcon: Icon(
-            Icons.search_rounded,
-            color: yellowColor,
-          ),
+          prefixIcon: Icon(Icons.search_rounded, color: yellowColor),
           suffixIcon: IconButton(
             icon: Icon(Icons.clear_rounded),
             onPressed: () => _searchController.clear(),
@@ -314,6 +350,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               color: Colors.white,
               borderRadius: BorderRadius.circular(30),
               border: Border.all(color: Colors.grey.shade300),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.shade200,
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                )
+              ],
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
@@ -352,31 +395,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
           return _buildEmptyState(Icons.error_outline, "No courses found");
         }
-
-        return AnimationLimiter(
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            itemCount: snapshot.data!.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: gridCount,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              childAspectRatio: aspectRatio,
-            ),
-            itemBuilder: (context, index) {
-              return AnimationConfiguration.staggeredGrid(
-                position: index,
-                duration: const Duration(milliseconds: 500),
-                columnCount: gridCount,
-                child: ScaleAnimation(
-                  child: FadeInAnimation(
-                    child: _buildCourseItem(snapshot.data![index]),
-                  ),
-                ),
-              );
-            },
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: NeverScrollableScrollPhysics(),
+          itemCount: snapshot.data!.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: gridCount,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: aspectRatio,
           ),
+          itemBuilder: (context, index) {
+            return FadeInUp(
+              delay: Duration(milliseconds: index * 100),
+              duration: Duration(milliseconds: 500),
+              child: _buildCourseItem(snapshot.data![index]),
+            );
+          },
         );
       },
     );
@@ -385,7 +420,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildCourseItem(QueryDocumentSnapshot<Object?> course) {
     final data = course.data() as Map<String, dynamic>;
     final authService = Provider.of<AuthService>(context, listen: false);
-
     return FutureBuilder<int>(
       future: authService.getEnrollmentCount(course.id),
       builder: (context, snapshot) {
@@ -455,7 +489,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Advertisement Section
+  // Advertisement Section.
   Widget _buildAdvertisementSection(AdvertisementProvider advertisementProvider) {
     if (advertisementProvider.isLoading) {
       return Container(
@@ -473,9 +507,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       );
     }
-
     if (advertisementProvider.advertisements.isEmpty) return SizedBox();
-
     return Container(
       height: 180,
       margin: EdgeInsets.only(bottom: 30),
@@ -484,11 +516,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // My Courses Section
+  // My Courses Section.
   Widget _buildMyCoursesSection(
       CourseProvider courseProvider, int gridCount, double aspectRatio) {
     final user = FirebaseAuth.instance.currentUser;
-
     return FutureBuilder<List<QueryDocumentSnapshot<Object?>>?>(
       future: user != null ? courseProvider.getEnrolledCourses(user.uid) : null,
       builder: (context, snapshot) {
@@ -498,11 +529,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             "Sign in to view your courses",
           );
         }
-
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildShimmerGrid(gridCount);
         }
-
         if (snapshot.hasError ||
             !snapshot.hasData ||
             snapshot.data!.isEmpty) {
@@ -511,7 +540,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             "Start your learning journey!\nExplore our courses",
           );
         }
-
         return _buildCoursesGrid(Future.value(snapshot.data), gridCount, aspectRatio);
       },
     );

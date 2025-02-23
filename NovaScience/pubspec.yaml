@@ -67,6 +67,7 @@ dependencies:
   flutter_animate: ^4.5.2
   flutter_cached_pdfview: ^0.4.3
   file_picker: ^8.3.1
+  animations: ^2.0.11
 
 
 
