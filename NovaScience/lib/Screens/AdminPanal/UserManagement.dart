@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
-
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
@@ -19,6 +19,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   final AuthService _authService = AuthService(); // Instantiate AuthService
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   List<CustomUser> users = [];
+  bool _isLoading = true;
+
+  // Custom color palette
+  final Color greenColor = const Color(0xFF11261f); // Dark green - primary
+  final Color yellowColor = const Color(0xFF123755); // Navy blue - secondary
+  final Color maroonColor = const Color(0xFF722626); // Maroon - error
+  final Color accentColor = const Color(0xFFe9c46a); // Gold accent
+  final Color surfaceColor = const Color(0xFFF7F7F2); // Light cream background
+  final Color textDarkColor = const Color(0xFF1F2937); // Dark text
+  final Color textLightColor = const Color(0xFFF9FAFB); // Light text
 
   @override
   void initState() {
@@ -28,12 +38,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   // Fetch users method
   Future<void> _fetchUsers() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       users = await _authService.fetchAllUsers(); // Fetch all users from AuthService
-      setState(() {}); // Refresh UI with the fetched users
+      setState(() {
+        _isLoading = false;
+      }); // Refresh UI with the fetched users
     } catch (e) {
       // Handle error (e.g., show a message)
       print("Error fetching users: $e");
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -85,26 +104,39 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         }
 
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('User deleted successfully!'),
+          content: Text(
+            'User deleted successfully!',
+            style: GoogleFonts.poppins(color: textLightColor),
+          ),
+          backgroundColor: greenColor,
+          behavior: SnackBarBehavior.floating,
         ));
 
         setState(() {}); // Update UI
       } else {
         print("No user is currently signed in.");
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('No user is currently signed in.'),
+          content: Text(
+            'No user is currently signed in.',
+            style: GoogleFonts.poppins(color: textLightColor),
+          ),
+          backgroundColor: maroonColor,
+          behavior: SnackBarBehavior.floating,
         ));
       }
     } catch (e) {
       // Handle errors
       print("Error deleting user: $e"); // Log the error
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Failed to delete user: $e'),
+        content: Text(
+          'Failed to delete user: $e',
+          style: GoogleFonts.poppins(color: textLightColor),
+        ),
+        backgroundColor: maroonColor,
+        behavior: SnackBarBehavior.floating,
       ));
     }
   }
-
-
 
   // Edit user method
   void _editUser(BuildContext context, CustomUser user) async {
@@ -126,13 +158,23 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         int index = users.indexOf(user);
         users[index] = updatedUser;
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('User updated successfully!'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'User updated successfully!',
+            style: GoogleFonts.poppins(color: textLightColor),
+          ),
+          backgroundColor: greenColor,
+          behavior: SnackBarBehavior.floating,
         ));
       } catch (e) {
         // Handle errors
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to update user: $e'),
+          content: Text(
+            'Failed to update user: $e',
+            style: GoogleFonts.poppins(color: textLightColor),
+          ),
+          backgroundColor: maroonColor,
+          behavior: SnackBarBehavior.floating,
         ));
       }
     }
@@ -145,21 +187,42 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final otherUsers = users.where((user) => user.isLoggedin == false).toList();
 
     return Scaffold(
+      backgroundColor: surfaceColor,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'User Management',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: textLightColor,
+            letterSpacing: 0.5,
+          ),
         ),
-        backgroundColor: Colors.blueAccent,
+        backgroundColor: greenColor,
+        elevation: 0,
         centerTitle: true,
-        elevation: 2,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(
-            bottom: Radius.circular(16),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh_outlined, color: textLightColor),
+            onPressed: _fetchUsers,
+            tooltip: 'Refresh',
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: Size.fromHeight(2.0),
+          child: Container(
+            color: accentColor,
+            height: 2.0,
           ),
         ),
       ),
-      body: SingleChildScrollView(
+      body: _isLoading
+          ? Center(
+        child: CircularProgressIndicator(
+          color: accentColor,
+        ),
+      )
+          : SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -168,7 +231,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             _buildSectionTitle('Currently Logged-in Users'),
             _buildUserList(loggedInUsers),
             const SizedBox(height: 20),
-            const Divider(thickness: 1),
+            Divider(
+              color: accentColor.withOpacity(0.3),
+              thickness: 1,
+            ),
             const SizedBox(height: 20),
             _buildSectionTitle('All Other Users'),
             _buildUserList(otherUsers),
@@ -188,16 +254,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           }
         },
         tooltip: 'Add User',
-        backgroundColor: Colors.blueAccent,
-        child: const Icon(Icons.add, color: Colors.white),
+        backgroundColor: greenColor,
+        elevation: 2,
+        child: Icon(Icons.add, color: textLightColor),
       ),
-      // If you'd like an extended FAB:
-      // floatingActionButton: FloatingActionButton.extended(
-      //   onPressed: _addUser,
-      //   label: const Text('Add User'),
-      //   icon: const Icon(Icons.add),
-      //   backgroundColor: Colors.blueAccent,
-      // ),
     );
   }
 
@@ -215,44 +275,60 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
         );
       },
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-        decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: Colors.blueAccent, width: 4)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 20,
-              color: Colors.blueGrey.shade900,
-              fontWeight: FontWeight.w600,
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              color: accentColor,
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
-        ),
+          const SizedBox(width: 8),
+          Text(
+            title.toUpperCase(),
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              letterSpacing: 1.0,
+              fontWeight: FontWeight.w600,
+              color: greenColor,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildUserList(List<CustomUser> loggedInUsers) {
-    if (loggedInUsers.isEmpty) {
+  Widget _buildUserList(List<CustomUser> userList) {
+    if (userList.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.people_outline_rounded, size: 60, color: Colors.grey.shade400),
+            Icon(
+              Icons.people_alt_outlined,
+              size: 48,
+              color: yellowColor.withOpacity(0.5),
+            ),
             const SizedBox(height: 16),
             Text(
-              'No currently logged-in users.',
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+              'No users in this category',
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: yellowColor,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'Once users log in, they will appear here.',
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+              'Users will appear here when available',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: textDarkColor.withOpacity(0.6),
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -261,13 +337,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
 
     return ListView.separated(
-      // If this is inside another scrollable view, keep `shrinkWrap` and custom scroll physics:
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: loggedInUsers.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 4),
+      itemCount: userList.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
-        final user = loggedInUsers[index];
+        final user = userList[index];
 
         // A simple fade-in animation for each tile
         return TweenAnimationBuilder<double>(
@@ -295,78 +370,224 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Widget _buildUserTile(CustomUser user, Animation<double> animation, int index) {
+    final bool isLoggedIn = user.isLoggedin ?? false;
+
     return SizeTransition(
       sizeFactor: animation,
-      child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-        shape: RoundedRectangleBorder(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: accentColor.withOpacity(0.5),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: greenColor.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
-        elevation: 3,
-        child: InkWell(
+        child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            // Optional: handle tile tap (e.g., show user details)
-          },
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            leading: CircleAvatar(
-              radius: 28,
-              backgroundColor: Colors.grey.shade200,
-              backgroundImage: user.profileImageUrl != null
-                  ? NetworkImage(user.profileImageUrl!)
-                  : null,
-              child: user.profileImageUrl == null
-                  ? const Icon(Icons.person, size: 28, color: Colors.grey)
-                  : null,
-            ),
-            title: Text(
-              user.name ?? 'No Name',
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-              ),
-            ),
-            subtitle: Text(
-              user.email ?? 'No Email',
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 14,
-              ),
-            ),
-            trailing: PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'edit') {
-                  _editUser(context, user);
-                } else if (value == 'delete') {
-                  if (user.email != null) {
-                    _deleteUser(user.email!);
-                  }
-                }
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                // Optional: show user details
               },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: ListTile(
-                    leading: Icon(Icons.edit),
-                    title: Text('Edit'),
-                  ),
+              splashColor: accentColor.withOpacity(0.1),
+              highlightColor: accentColor.withOpacity(0.05),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    // Status indicator dot for logged-in users
+                    if (isLoggedIn)
+                      Container(
+                        width: 8,
+                        height: 56,
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: accentColor,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+
+                    // Profile image
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: surfaceColor,
+                      backgroundImage: user.profileImageUrl != null
+                          ? NetworkImage(user.profileImageUrl!)
+                          : null,
+                      child: user.profileImageUrl == null
+                          ? Icon(Icons.person_outline, size: 28, color: yellowColor)
+                          : null,
+                    ),
+                    const SizedBox(width: 16),
+
+                    // User details
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user.name ?? 'No Name',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                              color: greenColor,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            user.email ?? 'No Email',
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: textDarkColor.withOpacity(0.7),
+                            ),
+                          ),
+                          if (user.role != null && user.role!.isNotEmpty)
+                            Container(
+                              margin: const EdgeInsets.only(top: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: yellowColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: yellowColor.withOpacity(0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                user.role!,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: yellowColor,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    // Actions
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Edit button
+                        IconButton(
+                          icon: Icon(
+                            Icons.edit_outlined,
+                            color: yellowColor,
+                            size: 20,
+                          ),
+                          onPressed: () => _editUser(context, user),
+                          tooltip: 'Edit',
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        // Delete button
+                        IconButton(
+                          icon: Icon(
+                            Icons.delete_outline,
+                            color: maroonColor,
+                            size: 20,
+                          ),
+                          onPressed: () => _showDeleteConfirmation(context, user),
+                          tooltip: 'Delete',
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: ListTile(
-                    leading: Icon(Icons.delete),
-                    title: Text('Delete'),
-                  ),
-                ),
-              ],
-              icon: const Icon(Icons.more_vert),
+              ),
             ),
           ),
         ),
       ),
     );
   }
+
+  // Show delete confirmation dialog
+  Future<void> _showDeleteConfirmation(BuildContext context, CustomUser user) async {
+    final bool result = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        title: Column(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: maroonColor,
+              size: 40,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Confirm Deletion',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: greenColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete ${user.name ?? 'this user'}? This action cannot be undone.',
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            color: textDarkColor,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'CANCEL',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: yellowColor,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: maroonColor,
+              foregroundColor: textLightColor,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'DELETE',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ) ?? false;
+
+    if (result && user.email != null) {
+      _deleteUser(user.email!);
+    }
+  }
+
   Future<CustomUser?> _showUserDialog({CustomUser? user}) async {
     final authService = Provider.of<AuthService>(context, listen: false);
 
@@ -386,272 +607,392 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     File? newProfileImage; // We'll pick this file & pass to AuthService
     bool isUploadingImage = false; // For showing a loading spinner while picking
 
-    // We can still show a placeholder image or the user’s current image
+    // We can still show a placeholder image or the user's current image
     String? previewImageUrl = user?.profileImageUrl ?? 'https://via.placeholder.com/150';
 
     // Key for optional form validation
     final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
     return showDialog<CustomUser>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return StatefulBuilder(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+      return StatefulBuilder(
           builder: (context, setState) {
-            // --- Helper: Pick an image locally (no Firebase upload here) ---
-            Future<void> pickImage() async {
-              final picker = ImagePicker();
-              final picked = await picker.pickImage(source: ImageSource.gallery);
-              if (picked == null) return;
-              setState(() => isUploadingImage = true);
+        // --- Helper: Pick an image locally (no Firebase upload here) ---
+        Future<void> pickImage() async {
+          final picker = ImagePicker();
+          final picked = await picker.pickImage(source: ImageSource.gallery);
+          if (picked == null) return;
+          setState(() => isUploadingImage = true);
 
-              try {
-                newProfileImage = File(picked.path);
-                // Update the preview to show the newly picked local image
-                previewImageUrl = null; // We'll show from local file now
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error picking image: $e'),
-                    backgroundColor: Colors.red,
+          try {
+            newProfileImage = File(picked.path);
+            // Update the preview to show the newly picked local image
+            previewImageUrl = null; // We'll show from local file now
+          } catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Error picking image: $e',
+                  style: GoogleFonts.poppins(color: textLightColor),
+                ),
+                backgroundColor: maroonColor,
+              ),
+            );
+          } finally {
+            setState(() => isUploadingImage = false);
+          }
+        }
+
+        // --- Dialog UI ---
+        return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Column(
+              children: [
+                Icon(
+                  user == null ? Icons.person_add_outlined : Icons.person_outlined,
+                  color: yellowColor,
+                  size: 40,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  user == null ? 'Add New User' : 'Edit User',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: greenColor,
                   ),
-                );
-              } finally {
-                setState(() => isUploadingImage = false);
-              }
-            }
-
-            // --- Dialog UI ---
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Text(
-                user == null ? 'Add User' : 'Edit User',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              content: SingleChildScrollView(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // ========== Avatar & Change Image Button ==========
-                      Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircleAvatar(
-                            radius: 45,
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ========== Avatar & Change Image Button ==========
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: accentColor,
+                              width: 2,
+                            ),
+                          ),
+                          child: CircleAvatar(
+                            radius: 48,
+                            backgroundColor: surfaceColor,
                             backgroundImage: previewImageUrl != null
                                 ? NetworkImage(previewImageUrl!)
                                 : (newProfileImage != null
                                 ? FileImage(newProfileImage!)
                                 : null),
                             child: (previewImageUrl == null && newProfileImage == null)
-                                ? const Icon(Icons.person, size: 45)
+                                ? Icon(Icons.person_outline, size: 48, color: yellowColor)
                                 : null,
                           ),
-                          if (isUploadingImage)
-                            Container(
-                              width: 90,
-                              height: 90,
-                              alignment: Alignment.center,
-                              decoration: const BoxDecoration(
-                                color: Colors.black38,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
+                        ),
+                        if (isUploadingImage)
+                          Container(
+                            width: 100,
+                            height: 100,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: Colors.black38,
+                              shape: BoxShape.circle,
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: isUploadingImage ? null : pickImage,
-                        icon: const Icon(Icons.camera_alt),
-                        label: const Text('Change Profile Image'),
-                      ),
-                      const Divider(height: 24),
-
-                      // ========== Name ==========
-                      TextFormField(
-                        controller: nameController,
-                        decoration: InputDecoration(
-                          labelText: 'Name',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(textLightColor),
+                            ),
                           ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: isUploadingImage ? null : pickImage,
+                      icon: Icon(
+                        Icons.camera_alt_outlined,
+                        size: 18,
+                      ),
+                      label: Text(
+                        'Change Profile Image',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: 16),
-
-                      // ========== Email ==========
-                      TextFormField(
-                        controller: emailController,
-                        decoration: InputDecoration(
-                          labelText: 'Email',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: yellowColor,
+                        side: BorderSide(color: yellowColor.withOpacity(0.5)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        keyboardType: TextInputType.emailAddress,
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       ),
-                      const SizedBox(height: 16),
+                    ),
+                    const Divider(height: 32),
 
-                      // ========== Role ==========
-                      TextFormField(
-                        controller: roleController,
-                        decoration: InputDecoration(
-                          labelText: 'Role',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
+                    // ========== Form Fields ==========
+                    _buildFormField(
+                      controller: nameController,
+                      label: 'Full Name',
+                      icon: Icons.person_outline,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter a name';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
 
-                      // ========== Phone Number ==========
-                      TextFormField(
-                        controller: phoneNumberController,
-                        decoration: InputDecoration(
-                          labelText: 'Phone Number',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        keyboardType: TextInputType.phone,
-                      ),
-                      const SizedBox(height: 16),
+                    _buildFormField(
+                      controller: emailController,
+                      label: 'Email Address',
+                      icon: Icons.email_outlined,
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter an email';
+                        }
+                        // Basic email validation
+                        if (!value.contains('@') || !value.contains('.')) {
+                          return 'Please enter a valid email';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
 
-                      // ========== Password ==========
-                      TextFormField(
-                        controller: passwordController,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
+                    _buildFormField(
+                      controller: roleController,
+                      label: 'Role',
+                      icon: Icons.badge_outlined,
+                    ),
+                    const SizedBox(height: 16),
 
-                      // ========== Confirm Password ==========
-                      TextFormField(
-                        controller: confirmPasswordController,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: 'Confirm Password',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                    _buildFormField(
+                      controller: phoneNumberController,
+                      label: 'Phone Number',
+                      icon: Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 16),
+
+                    _buildFormField(
+                      controller: passwordController,
+                      label: 'Password',
+                      icon: Icons.lock_outline,
+                      obscureText: true,
+                      validator: (value) {
+                        if (user == null && (value == null || value.isEmpty)) {
+                          return 'Please enter a password';
+                        }
+                        if (value != null && value.isNotEmpty && value.length < 6) {
+                          return 'Password must be at least 6 characters';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    _buildFormField(
+                      controller: confirmPasswordController,
+                      label: 'Confirm Password',
+                      icon: Icons.lock_outline,
+                      obscureText: true,
+                      validator: (value) {
+                        if (passwordController.text.isNotEmpty &&
+                            value != passwordController.text) {
+                          return 'Passwords do not match';
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
                 ),
               ),
-              actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              actions: [
-                // ========== Cancel Button ==========
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
+            ),
+            actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            actions: [
+            // ========== Cancel Button ==========
+            TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+    child: Text(
+    'CANCEL',
+    style: GoogleFonts.poppins(
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    color: yellowColor,
+    ),
+    ),
+    ),
 
-                // ========== Save Button ==========
-                ElevatedButton(
-                  onPressed: () async {
-                    // Basic password check
-                    if (passwordController.text !=
-                        confirmPasswordController.text) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Passwords do not match'),
-                        ),
-                      );
-                      return;
-                    }
+    // ========== Save Button ==========
+    ElevatedButton(
+    onPressed: () async {
+    // Validate form
+    if (_formKey.currentState!.validate()) {
+    // Basic password check
+    if (passwordController.text != confirmPasswordController.text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+    content: Text(
+    'Passwords do not match',
+    style: GoogleFonts.poppins(color: textLightColor),
+    ),
+    backgroundColor: maroonColor,
+    ),
+    );
+    return;
+    }
 
-                    try {
-                      if (user == null) {
-                        // --- Create a NEW user via AuthService ---
-                        await authService.addUser(
-                          name: nameController.text.trim(),
-                          email: emailController.text.trim(),
-                          password: passwordController.text,
-                          role: roleController.text.trim().isEmpty
-                              ? 'User'
-                              : roleController.text.trim(),
-                          phoneNumber: phoneNumberController.text.trim().isEmpty
-                              ? null
-                              : phoneNumberController.text.trim(),
-                          profileImage: newProfileImage,
-                        );
-                      } else {
-                        // --- UPDATE existing user's Firestore data by Email ---
-                        await authService.updateUserByEmail(
-                          email: user.email ?? '', // old email
-                          updatedData: {
-                            'name': nameController.text.trim(),
-                            'email': emailController.text.trim(),
-                            'role': roleController.text.trim().isEmpty
-                                ? user.role
-                                : roleController.text.trim(),
-                            'phoneNumber': phoneNumberController.text.trim(),
-                          },
-                        );
+    try {
+    if (user == null) {
+    // --- Create a NEW user via AuthService ---
+    await authService.addUser(
+    name: nameController.text.trim(),
+    email: emailController.text.trim(),
+    password: passwordController.text,
+    role: roleController.text.trim().isEmpty
+    ? 'User'
+        : roleController.text.trim(),
+    phoneNumber: phoneNumberController.text.trim().isEmpty
+    ? null
+        : phoneNumberController.text.trim(),
+    profileImage: newProfileImage,
+    );
+    } else {
+    // --- UPDATE existing user's Firestore data by Email ---
+    await authService.updateUserByEmail(
+    email: user.email ?? '', // old email
+    updatedData: {
+    'name': nameController.text.trim(),
+    'email': emailController.text.trim(),
+    'role': roleController.text.trim().isEmpty
+    ? user.role
+        : roleController.text.trim(),
+    'phoneNumber': phoneNumberController.text.trim(),
+    },
+    );
 
-                        // If we picked a new image, call updateUser to upload & override
-                        if (newProfileImage != null) {
-                          await authService.updateUser(
-                            updatedData: {},
-                            newProfileImage: newProfileImage,
-                          );
-                        }
+    // If we picked a new image, call updateUser to upload & override
+    if (newProfileImage != null) {
+    await authService.updateUser(
+    updatedData: {},
+    newProfileImage: newProfileImage,
+    );
+    }
+    }
 
-                        // For changing password of a user who is NOT the currently logged-in user,
-                        // you typically need Admin privileges and must use custom logic (e.g., Admin SDK).
-                        // If the edited user is the current user, you can do something like:
-                        //   await FirebaseAuth.instance.currentUser?.updatePassword(passwordController.text);
-                      }
-
-                      // Return updated/new CustomUser to the caller
-                      Navigator.of(context).pop(
-                        CustomUser(
-                          name: nameController.text,
-                          email: emailController.text,
-                          role: roleController.text,
-                          phoneNumber: phoneNumberController.text,
-                          profileImageUrl: previewImageUrl,
-                        ),
-                      );
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: $e')),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 14,
-                    ),
-                  ),
-                  child: const Text(
-                    'Save',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            );
-          },
+    // Return updated/new CustomUser to the caller
+    Navigator.of(context).pop(
+    CustomUser(
+    name: nameController.text,
+    email: emailController.text,
+    role: roleController.text,
+    phoneNumber: phoneNumberController.text,
+    profileImageUrl: previewImageUrl,
+    ),
+    );
+    } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        'Error: $e',
+        style: GoogleFonts.poppins(color: textLightColor),
+      ),
+      backgroundColor: maroonColor,
+      behavior: SnackBarBehavior.floating,
+    ),
+    );
+    }
+    }
+    },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: greenColor,
+        foregroundColor: textLightColor,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+      child: Text(
+        'SAVE',
+        style: GoogleFonts.poppins(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
+        ),
+      ),
+    ),
+            ],
         );
-      },
+          },
+      );
+        },
+    );
+  }
+
+  // Helper method to build form fields with consistent styling
+  Widget _buildFormField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    bool obscureText = false,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      style: GoogleFonts.poppins(
+        fontSize: 14,
+        color: textDarkColor,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: GoogleFonts.poppins(
+          color: yellowColor,
+          fontSize: 14,
+        ),
+        prefixIcon: Icon(icon, color: yellowColor, size: 20),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: accentColor, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: maroonColor),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: maroonColor, width: 1.5),
+        ),
+        filled: true,
+        fillColor: surfaceColor,
+        contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      ),
+      validator: validator,
     );
   }
 }

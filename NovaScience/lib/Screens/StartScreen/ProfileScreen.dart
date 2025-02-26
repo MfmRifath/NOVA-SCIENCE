@@ -1,7 +1,7 @@
-import 'package:animate_do/animate_do.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../Service/AuthService.dart';
 
@@ -11,14 +11,15 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  // Color palette
+  final Color greenColor = const Color(0xFF11261f);
+  final Color yellowColor = const Color(0xFF123755);
+  final Color maroonColor = const Color(0xFF722626);
+  final Color accentColor = const Color(0xFFe9c46a);
+
   final AuthService _authService = AuthService();
   Map<String, dynamic>? userData;
   bool isLoading = true;
-
-  // Define color constants for a consistent look
-  final Color primaryColor = Colors.blueAccent; // Used for edit actions and accent elements
-  final Color dangerColor = Colors.redAccent;     // Used for sign out and delete actions
-  final Color infoCardColor = Colors.black.withOpacity(0.6); // Background for info cards
 
   @override
   void initState() {
@@ -51,12 +52,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       Navigator.of(context).pushReplacementNamed('/join');
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Your account has been deleted successfully.")),
+        SnackBar(
+          content: Text("Your account has been deleted successfully."),
+          backgroundColor: maroonColor,
+        ),
       );
     } catch (e) {
       print("Error deleting account: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to delete account. Please try again.")),
+        SnackBar(
+          content: Text("Failed to delete account. Please try again."),
+          backgroundColor: maroonColor,
+        ),
       );
     } finally {
       setState(() => isLoading = false);
@@ -70,128 +77,119 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final bool isLargeScreen = screenWidth > 600;
+    final screenSize = MediaQuery.of(context).size;
+    final bool isLargeScreen = screenSize.width > 600;
 
     return Scaffold(
-      body: Stack(
+      backgroundColor: Colors.grey.shade100,
+      body: isLoading
+          ? Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+        ),
+      )
+          : Stack(
         children: [
-          // Background Image with FadeIn animation
-          Positioned.fill(
-            child: FadeIn(
-              duration: Duration(seconds: 1),
-              child: Image.asset(
-                'assets/images/background.jpg',
-                fit: BoxFit.cover,
+          // Header background
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 160,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [greenColor, yellowColor],
+                ),
               ),
             ),
           ),
 
-          // Gradient Overlay for improved contrast
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black.withOpacity(0.6),
-                  Colors.black.withOpacity(0.3),
-                  Colors.black.withOpacity(0.6),
+          // Main content
+          SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(height: 20),
+
+                  // Profile header with image and name
+                  _buildProfileHeader(),
+
+                  SizedBox(height: 30),
+
+                  // Profile information sections
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSectionTitle("Personal Information"),
+                        SizedBox(height: 16),
+                        _buildProfileInfoCard(),
+
+                        SizedBox(height: 24),
+
+                        _buildSectionTitle("Account Settings"),
+                        SizedBox(height: 16),
+                        _buildAccountSettingsCard(),
+
+                        SizedBox(height: 40),
+
+                        // Action buttons
+                        _buildActionButtons(),
+
+                        SizedBox(height: 40),
+                      ],
+                    ),
+                  ),
                 ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
               ),
             ),
           ),
 
-          // Main Content: either a loader or the scrollable profile content
-          isLoading
-              ? Center(
-            child: Pulse(
-              child: CircularProgressIndicator(color: primaryColor),
+          // Loading overlay
+          if (isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                ),
+              ),
             ),
-          )
-              : SingleChildScrollView(
-            physics: BouncingScrollPhysics(),
-            child: Column(
-              children: [
-                SizedBox(height: 60),
-
-                // Profile Header Section with animated appearance
-                ElasticIn(
-                  duration: Duration(milliseconds: 800),
-                  child: Column(
-                    children: [
-                      _buildProfileImage(),
-                      SizedBox(height: 20),
-                      _buildProfileDetails(),
-                    ],
-                  ),
-                ),
-
-                SizedBox(height: 30),
-
-                // Action Buttons: Edit & Sign Out
-                FadeInLeft(
-                  duration: Duration(milliseconds: 600),
-                  child: _buildActionButtons(context),
-                ),
-
-                SizedBox(height: 40),
-
-                // Profile Information Cards
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: isLargeScreen ? 40 : 20),
-                  child: ZoomIn(
-                    child: _buildProfileInfoCards(),
-                  ),
-                ),
-
-                SizedBox(height: 40),
-
-                // Delete Account Button
-                FadeInUp(
-                  duration: Duration(milliseconds: 800),
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 40),
-                    child: _buildDeleteButton(),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildProfileImage() {
-    return BounceInDown(
-      duration: Duration(milliseconds: 800),
-      child: GestureDetector(
-        onTap: () {
-          // Implement profile image editing functionality here, if desired.
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 15,
-                spreadRadius: 5,
-              )
-            ],
-          ),
-          child: ClipOval(
-            child: Container(
-              width: 140,
-              height: 140,
-              // Check if the profileImageUrl exists; if not, use the local asset.
+  Widget _buildProfileHeader() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          // Profile image
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 3),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
+            child: ClipOval(
               child: userData?["profileImageUrl"] != null
                   ? Image.network(
                 userData!["profileImageUrl"],
                 fit: BoxFit.cover,
-                // If the network image fails, use a local placeholder.
                 errorBuilder: (context, error, stackTrace) {
                   return Image.asset(
                     'assets/images/logo.png',
@@ -205,189 +203,307 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
+          SizedBox(width: 20),
 
-  Widget _buildProfileDetails() {
-    return Column(
-      children: [
-        FadeInDown(
-          child: Text(
-            userData?['name'] ?? 'John Doe',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              letterSpacing: 1.1,
-            ),
-          ),
-        ),
-        SizedBox(height: 10),
-        FadeInUp(
-          child: Text(
-            userData?['bio'] ?? 'Flutter Enthusiast',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.white70,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButtons(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildProfileButton(
-          icon: Icons.edit,
-          label: "Edit",
-          color: primaryColor,
-          onTap: () => Navigator.pushNamed(context, '/editProfile'),
-        ),
-        SizedBox(width: 20),
-        _buildProfileButton(
-          icon: Icons.logout,
-          label: "Sign Out",
-          color: dangerColor,
-          onTap: _signOut,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProfileButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return ElasticIn(
-      duration: Duration(milliseconds: 500),
-      child: Tooltip(
-        message: label,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            padding: EdgeInsets.symmetric(vertical: 12, horizontal: 25),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withOpacity(0.3)),
-            ),
-            child: Row(
+          // Name and title
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(icon, color: color, size: 22),
-                SizedBox(width: 10),
                 Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                  userData?['name'] ?? 'User Name',
+                  style: GoogleFonts.roboto(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  userData?['email'] ?? 'user@example.com',
+                  style: GoogleFonts.roboto(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    color: Colors.white.withOpacity(0.9),
                   ),
                 ),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildProfileInfoCards() {
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: GoogleFonts.roboto(
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: greenColor,
+      ),
+    );
+  }
+
+  Widget _buildProfileInfoCard() {
     return Container(
-      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: infoCardColor,
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
         boxShadow: [
           BoxShadow(
-            color: Colors.black45,
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 8,
-            offset: Offset(0, 4),
+            offset: Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         children: [
-          _buildInfoCard(Icons.email, "Email", userData?['email'] ?? "johndoe@example.com"),
+          _buildInfoRow(
+            icon: Icons.person_outline,
+            title: "Full Name",
+            value: userData?['name'] ?? 'Not provided',
+          ),
           _buildDivider(),
-          _buildInfoCard(Icons.phone, "Phone", userData?['phoneNumber'] ?? "+123 456 7890"),
+          _buildInfoRow(
+            icon: Icons.email_outlined,
+            title: "Email",
+            value: userData?['email'] ?? 'Not provided',
+          ),
           _buildDivider(),
-          _buildInfoCard(Icons.location_on, "Location", userData?['location'] ?? "San Francisco, CA"),
+          _buildInfoRow(
+            icon: Icons.phone_outlined,
+            title: "Phone",
+            value: userData?['phoneNumber'] ?? 'Not provided',
+          ),
           _buildDivider(),
-          _buildInfoCard(
-            Icons.cake,
-            "Birthday",
-            userData?['birthday'] != null && userData?['birthday'] is Timestamp
-                ? _formatTimestamp(userData!['birthday'])
-                : "January 1, 1990",
+          _buildInfoRow(
+            icon: Icons.location_on_outlined,
+            title: "Location",
+            value: userData?['location'] ?? 'Not provided',
+          ),
+          if (userData?['birthday'] != null && userData?['birthday'] is Timestamp) ...[
+            _buildDivider(),
+            _buildInfoRow(
+              icon: Icons.calendar_today_outlined,
+              title: "Birthday",
+              value: _formatTimestamp(userData!['birthday']),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccountSettingsCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          _buildSettingRow(
+            icon: Icons.security_outlined,
+            title: "Security Settings",
+            onTap: () {
+              // Navigate to security settings
+            },
+          ),
+          _buildDivider(),
+          _buildSettingRow(
+            icon: Icons.notifications_outlined,
+            title: "Notification Preferences",
+            onTap: () {
+              // Navigate to notification settings
+            },
+          ),
+          _buildDivider(),
+          _buildSettingRow(
+            icon: Icons.language_outlined,
+            title: "Language and Region",
+            onTap: () {
+              // Navigate to language settings
+            },
+          ),
+          _buildDivider(),
+          _buildSettingRow(
+            icon: Icons.payment_outlined,
+            title: "Payment Methods",
+            onTap: () {
+              // Navigate to payment settings
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildInfoCard(IconData icon, String title, String info) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.white70),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: Colors.white70,
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-        ),
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String title,
+    required String value,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            size: 20,
+            color: yellowColor,
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.roboto(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  value,
+                  style: GoogleFonts.roboto(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w400,
+                    color: textColor(value),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
-      subtitle: Text(
-        info,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-      minVerticalPadding: 0,
     );
+  }
+
+  Widget _buildSettingRow({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: yellowColor,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: GoogleFonts.roboto(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: Colors.grey.shade400,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color textColor(String value) {
+    if (value == 'Not provided') {
+      return Colors.grey.shade400;
+    }
+    return Colors.grey.shade800;
   }
 
   Widget _buildDivider() {
     return Divider(
-      color: Colors.white.withOpacity(0.2),
       height: 1,
-      indent: 20,
-      endIndent: 20,
+      thickness: 1,
+      color: Colors.grey.shade200,
     );
   }
 
-  Widget _buildDeleteButton() {
-    return Tooltip(
-      message: "Permanently delete your account",
-      child: TextButton.icon(
-        icon: Icon(Icons.delete_forever, color: dangerColor.withOpacity(0.9)),
-        label: Text(
-          "Delete Account",
-          style: TextStyle(
-            color: dangerColor.withOpacity(0.9),
-            fontWeight: FontWeight.bold,
+  Widget _buildActionButtons() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ElevatedButton.icon(
+          onPressed: () => Navigator.pushNamed(context, '/editProfile'),
+          icon: Icon(Icons.edit_outlined, size: 18),
+          label: Text('EDIT PROFILE'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: accentColor,
+            foregroundColor: greenColor,
+            elevation: 0,
+            padding: EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
+            textStyle: GoogleFonts.roboto(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+            ),
           ),
         ),
-        onPressed: () => _confirmDeleteAccount(context),
-        style: TextButton.styleFrom(
-          padding: EdgeInsets.symmetric(vertical: 15, horizontal: 25),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
+        SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _signOut,
+          icon: Icon(Icons.logout_outlined, size: 18),
+          label: Text('SIGN OUT'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: maroonColor,
+            side: BorderSide(color: maroonColor.withOpacity(0.5), width: 1),
+            padding: EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
+            textStyle: GoogleFonts.roboto(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+            ),
           ),
-          backgroundColor: dangerColor.withOpacity(0.1),
         ),
-      ),
+        SizedBox(height: 24),
+        TextButton.icon(
+          onPressed: () => _confirmDeleteAccount(context),
+          icon: Icon(Icons.delete_outline, size: 18),
+          label: Text('Delete Account'),
+          style: TextButton.styleFrom(
+            foregroundColor: maroonColor,
+            padding: EdgeInsets.symmetric(vertical: 16),
+            alignment: Alignment.center,
+            textStyle: GoogleFonts.roboto(
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -395,52 +511,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: dangerColor),
-            SizedBox(width: 10),
-            Text("Delete Account", style: TextStyle(color: dangerColor)),
-          ],
+        title: Text(
+          "Delete Account",
+          style: GoogleFonts.roboto(
+            fontWeight: FontWeight.w600,
+            color: maroonColor,
+          ),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("This action will:", style: TextStyle(fontWeight: FontWeight.w500, color: Colors.white70)),
-            SizedBox(height: 10),
-            _buildDeleteConsequence(Icons.delete, "Permanently remove all your data"),
-            _buildDeleteConsequence(Icons.block, "Disable all associated services"),
-            _buildDeleteConsequence(Icons.warning, "Cannot be undone"),
+            Text(
+              "Are you sure you want to delete your account?",
+              style: GoogleFonts.roboto(
+                fontWeight: FontWeight.w400,
+                color: Colors.grey.shade800,
+              ),
+            ),
+            SizedBox(height: 16),
+            Text(
+              "This action will permanently remove all your data and cannot be undone.",
+              style: GoogleFonts.roboto(
+                fontWeight: FontWeight.w400,
+                color: Colors.grey.shade600,
+                fontSize: 14,
+              ),
+            ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text("Cancel", style: TextStyle(color: Colors.grey)),
+            child: Text(
+              "Cancel",
+              style: GoogleFonts.roboto(
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: dangerColor),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: maroonColor,
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
             onPressed: () {
               Navigator.pop(context);
               _deleteAccount();
             },
-            child: Text("Confirm Delete"),
+            child: Text(
+              "Delete",
+              style: GoogleFonts.roboto(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildDeleteConsequence(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: dangerColor.withOpacity(0.9)),
-          SizedBox(width: 10),
-          Text(text, style: TextStyle(color: dangerColor.withOpacity(0.9))),
-        ],
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+        ),
       ),
     );
   }

@@ -2,9 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart'; // For date formatting
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../Modals/User.dart';
 import '../../Service/AuthService.dart';
 
@@ -27,57 +28,115 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _isLoading = true;
   bool _isUpdating = false;
   CustomUser? currentUser;
+  String? _originalName; // Store original name to check for changes
+
+  // Updated color palette
+  final Color greenColor = const Color(0xFF11261f); // Dark green - primary
+  final Color yellowColor = const Color(0xFF123755); // Navy blue - secondary
+  final Color maroonColor = const Color(0xFF722626); // Maroon - error
+  final Color accentColor = const Color(0xFFe9c46a); // Gold accent
+  final Color surfaceColor = const Color(0xFFF7F4E9); // Light cream background
+  final Color textDarkColor = const Color(0xFF1F2937); // Dark text
+  final Color textLightColor = const Color(0xFFF9FAFB); // Light text
+  final Color dividerColor = const Color(0xFFE5E7EB); // Divider color
 
   @override
   void initState() {
     super.initState();
-  }
-
-  // Use didChangeDependencies to safely access the context.
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _loadUserData();
-  }
-
-  // Load user data once and update the text controllers.
-  Future<void> _loadUserData() async {
-    AuthService authService = Provider.of<AuthService>(context, listen: false);
-    CustomUser? fetchedUser = await authService.getCurrentUser();
-
-    if (fetchedUser != null) {
-      setState(() {
-        currentUser = fetchedUser;
-        _nameController.text = currentUser!.name ?? '';
-        _phoneController.text = currentUser!.phoneNumber ?? '';
-        _locationController.text = currentUser!.location ?? '';
-        _bioController.text = currentUser!.bio ?? '';
-        _birthday = currentUser!.birthday;
-      });
-    }
-    setState(() {
-      _isLoading = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUserData();
     });
+  }
+
+  // Load user data and update the text controllers.
+  Future<void> _loadUserData() async {
+    try {
+      AuthService authService = Provider.of<AuthService>(context, listen: false);
+      CustomUser? fetchedUser = await authService.getCurrentUser();
+
+      if (fetchedUser != null && mounted) {
+        setState(() {
+          currentUser = fetchedUser;
+          _nameController.text = currentUser!.name ?? '';
+          _originalName = currentUser!.name; // Store original name
+          _phoneController.text = currentUser!.phoneNumber ?? '';
+          _locationController.text = currentUser!.location ?? '';
+          _bioController.text = currentUser!.bio ?? '';
+          _birthday = currentUser!.birthday;
+          _isLoading = false;
+        });
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          _showErrorSnackbar('Failed to load user data.');
+        }
+      }
+    } catch (e) {
+      print('Error loading user data: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showErrorSnackbar('Error loading user data: $e');
+      }
+    }
   }
 
   // Pick a new profile image from the gallery.
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     try {
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      if (image != null) {
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80, // Compress image to reduce size
+        maxWidth: 800,
+      );
+      if (image != null && mounted) {
         setState(() {
           _profileImage = File(image.path);
         });
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error picking image.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showErrorSnackbar('Error picking image: $e');
     }
+  }
+
+  void _showErrorSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.poppins(
+            color: textLightColor,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        backgroundColor: maroonColor,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+    );
+  }
+
+  void _showSuccessSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.poppins(
+            color: greenColor,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        backgroundColor: accentColor,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+    );
   }
 
   Future<void> _updateProfile() async {
@@ -86,80 +145,87 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _isUpdating = true;
       });
 
-      AuthService authService = Provider.of<AuthService>(context, listen: false);
-      CustomUser? user = currentUser;
-
-      if (user == null) {
-        setState(() {
-          _isUpdating = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('No user data found.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-
-      Map<String, dynamic> updatedData = {
-        'name': _nameController.text.trim(),
-        'phoneNumber': _phoneController.text.trim(),
-        'location': _locationController.text.trim(),
-        'bio': _bioController.text.trim(),
-        'birthday': _birthday != null ? Timestamp.fromDate(_birthday!) : null,
-      };
-
       try {
+        AuthService authService = Provider.of<AuthService>(context, listen: false);
+        CustomUser? user = currentUser;
+
+        if (user == null) {
+          setState(() {
+            _isUpdating = false;
+          });
+          _showErrorSnackbar('No user data found.');
+          return;
+        }
+
+        // Create the updated data map
+        Map<String, dynamic> updatedData = {
+          'name': _nameController.text.trim(),
+          'phoneNumber': _phoneController.text.trim(),
+          'location': _locationController.text.trim(),
+          'bio': _bioController.text.trim(),
+        };
+
+        // Only add birthday to the update if it's set
+        if (_birthday != null) {
+          updatedData['birthday'] = Timestamp.fromDate(_birthday!);
+        }
+
+        // Update the user profile
         await authService.updateUser(
           updatedData: updatedData,
           newProfileImage: _profileImage,
         );
 
         if (!mounted) return;
+
         setState(() {
           _isUpdating = false;
         });
 
-        // Show the success SnackBar using the current context.
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _showSuccessSnackbar('Profile updated successfully!');
 
         // Delay navigation briefly to allow the SnackBar to display.
-        Future.delayed(Duration(milliseconds: 500), () {
+        Future.delayed(Duration(milliseconds: 800), () {
           if (mounted) {
-            Navigator.pop(context);
+            Navigator.pop(context, true); // Return true to indicate success
           }
         });
       } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _isUpdating = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update profile.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        print('Error updating profile: $e');
+        if (mounted) {
+          setState(() {
+            _isUpdating = false;
+          });
+          _showErrorSnackbar('Failed to update profile: $e');
+        }
       }
     }
   }
+
   // Allow user to select a birthday using the date picker.
   Future<void> _selectBirthday() async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _birthday ?? DateTime.now(),
+      initialDate: _birthday ?? DateTime(2000),
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: yellowColor,
+              onPrimary: textLightColor,
+              surface: Colors.white,
+              onSurface: textDarkColor,
+            ),
+            dialogBackgroundColor: Colors.white,
+          ),
+          child: child!,
+        );
+      },
     );
-    if (picked != null && picked != _birthday) {
+
+    if (picked != null && mounted) {
       setState(() {
         _birthday = picked;
       });
@@ -172,38 +238,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (_isLoading) {
       return Scaffold(
         appBar: _buildAppBar(),
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(
+          child: CircularProgressIndicator(
+            color: accentColor,
+          ),
+        ),
       );
     }
+
     // Wrap with GestureDetector to dismiss keyboard on tap outside.
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: Colors.grey.shade100,
+        backgroundColor: surfaceColor,
         appBar: _buildAppBar(),
-        body: SingleChildScrollView(
-          physics: BouncingScrollPhysics(),
-          padding: EdgeInsets.all(24),
-          child: Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            physics: BouncingScrollPhysics(),
             child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    _buildProfileImageSection(),
-                    SizedBox(height: 24),
-                    _buildFormFields(),
-                    SizedBox(height: 24),
-                    _buildBirthdayPicker(),
-                    SizedBox(height: 24),
-                    _buildSaveButton(),
-                  ],
-                ),
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  SizedBox(height: 20),
+                  _buildProfileHeader(),
+                  SizedBox(height: 24),
+                  _buildProfileForm(),
+                  SizedBox(height: 40),
+                ],
               ),
             ),
           ),
@@ -212,67 +273,156 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // Custom AppBar with a rounded bottom.
+  // Custom AppBar with official design
   AppBar _buildAppBar() {
     return AppBar(
       title: Text(
         'Edit Profile',
-        style: TextStyle(
+        style: GoogleFonts.poppins(
           fontWeight: FontWeight.w600,
-          color: Colors.grey.shade800,
+          color: textLightColor,
+          fontSize: 18,
+          letterSpacing: 0.5,
         ),
       ),
-      backgroundColor: Colors.white,
-      elevation: 2,
-      iconTheme: IconThemeData(color: Colors.grey.shade700),
+      backgroundColor: greenColor,
+      elevation: 0,
       centerTitle: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+      leading: IconButton(
+        icon: Icon(Icons.arrow_back_rounded, color: textLightColor),
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+      bottom: PreferredSize(
+        preferredSize: Size.fromHeight(4.0),
+        child: Container(
+          color: accentColor.withOpacity(0.4),
+          height: 1.0,
+        ),
       ),
     );
   }
 
-  // Profile image section with a circular image and camera icon overlay.
+  // Profile header with image and name
+  Widget _buildProfileHeader() {
+    return Container(
+      padding: EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: greenColor.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: accentColor.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'Profile Photo',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: greenColor,
+              letterSpacing: 0.5,
+            ),
+          ),
+          SizedBox(height: 20),
+          _buildProfileImageSection(),
+        ],
+      ),
+    );
+  }
+
+  // Profile image section with a circular image and camera icon overlay
   Widget _buildProfileImageSection() {
     return Stack(
       alignment: Alignment.center,
       children: [
+        // Profile image
         Container(
           width: 140,
           height: 140,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
+            border: Border.all(
+              color: accentColor,
+              width: 2,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.blue.shade100.withOpacity(0.4),
-                blurRadius: 20,
-                spreadRadius: 4,
+                color: greenColor.withOpacity(0.1),
+                blurRadius: 15,
+                spreadRadius: 2,
               ),
             ],
           ),
-          child: ClipOval(
-            child: _profileImage != null
-                ? Image.file(
-              _profileImage!,
-              fit: BoxFit.cover,
-            )
-                : Image.network(
-              currentUser?.profileImageUrl ??
-                  'https://via.placeholder.com/150',
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Center(child: CircularProgressIndicator());
-              },
-              errorBuilder: (context, error, stackTrace) {
-                return Image.asset(
-                  'assets/images/logo.png',
-                  fit: BoxFit.cover,
-                );
-              },
+          child: Hero(
+            tag: 'profile-image-${currentUser?.id}',
+            child: ClipOval(
+              child: _profileImage != null
+                  ? Image.file(
+                _profileImage!,
+                fit: BoxFit.cover,
+                width: 140,
+                height: 140,
+              )
+                  : currentUser?.profileImageUrl != null
+                  ? Image.network(
+                currentUser!.profileImageUrl!,
+                fit: BoxFit.cover,
+                width: 140,
+                height: 140,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    width: 140,
+                    height: 140,
+                    color: yellowColor.withOpacity(0.1),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: accentColor,
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                            : null,
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 140,
+                    height: 140,
+                    color: yellowColor.withOpacity(0.1),
+                    child: Icon(
+                      Icons.person_rounded,
+                      size: 80,
+                      color: yellowColor.withOpacity(0.4),
+                    ),
+                  );
+                },
+              )
+                  : Container(
+                width: 140,
+                height: 140,
+                color: yellowColor.withOpacity(0.1),
+                child: Icon(
+                  Icons.person_rounded,
+                  size: 80,
+                  color: yellowColor.withOpacity(0.4),
+                ),
+              ),
             ),
           ),
         ),
+
+        // Edit button overlay
         Positioned(
           bottom: 0,
           right: 0,
@@ -281,20 +431,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             child: Container(
               padding: EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: accentColor,
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white,
+                  width: 2,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
+                    color: greenColor.withOpacity(0.2),
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
                   ),
                 ],
               ),
               child: Icon(
                 FeatherIcons.camera,
-                color: Colors.blue.shade600,
-                size: 24,
+                color: greenColor,
+                size: 20,
               ),
             ),
           ),
@@ -303,100 +457,262 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // Build form fields for full name, phone number, location, and bio.
-  Widget _buildFormFields() {
+  // Form container for profile information
+  Widget _buildProfileForm() {
+    return Container(
+      padding: EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: greenColor.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: accentColor.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(FeatherIcons.user, size: 18, color: yellowColor),
+                SizedBox(width: 10),
+                Text(
+                  'Personal Information',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: greenColor,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            Divider(color: dividerColor, thickness: 1),
+            SizedBox(height: 20),
+            _buildTextField(
+              controller: _nameController,
+              label: 'Full Name',
+              icon: FeatherIcons.user,
+              hintText: 'Enter your full name',
+            ),
+            SizedBox(height: 16),
+            _buildTextField(
+              controller: _phoneController,
+              label: 'Phone Number',
+              icon: FeatherIcons.phone,
+              hintText: 'Enter your phone number',
+              keyboardType: TextInputType.phone,
+            ),
+            SizedBox(height: 16),
+            _buildTextField(
+              controller: _locationController,
+              label: 'Location',
+              icon: FeatherIcons.mapPin,
+              hintText: 'Enter your location',
+            ),
+            SizedBox(height: 16),
+            _buildTextField(
+              controller: _bioController,
+              label: 'Bio',
+              icon: FeatherIcons.edit3,
+              hintText: 'Tell us about yourself',
+              maxLines: 3,
+            ),
+            SizedBox(height: 24),
+            Text(
+              'Birthday',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: greenColor,
+              ),
+            ),
+            SizedBox(height: 8),
+            _buildBirthdayPicker(),
+            SizedBox(height: 32),
+            _buildSaveButton(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Redesigned text field widget with official style
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    String? hintText,
+    TextInputType keyboardType = TextInputType.text,
+    int maxLines = 1,
+  }) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildTextField(
-          controller: _nameController,
-          label: 'Full Name',
-          icon: FeatherIcons.user,
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: greenColor,
+          ),
         ),
-        SizedBox(height: 16),
-        _buildTextField(
-          controller: _phoneController,
-          label: 'Phone Number',
-          icon: FeatherIcons.phone,
-          keyboardType: TextInputType.phone,
-        ),
-        SizedBox(height: 16),
-        _buildTextField(
-          controller: _locationController,
-          label: 'Location',
-          icon: FeatherIcons.mapPin,
-        ),
-        SizedBox(height: 16),
-        _buildTextField(
-          controller: _bioController,
-          label: 'Bio',
-          icon: FeatherIcons.edit3,
-          maxLines: 3,
+        SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          enabled: true,
+          style: GoogleFonts.poppins(
+            fontSize: 15,
+            color: textDarkColor,
+          ),
+          decoration: InputDecoration(
+            hintText: hintText,
+            prefixIcon: Icon(icon, color: yellowColor, size: 18),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: dividerColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: dividerColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: accentColor, width: 1),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: maroonColor),
+            ),
+            filled: true,
+            fillColor: surfaceColor,
+            contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            hintStyle: GoogleFonts.poppins(
+              color: textDarkColor.withOpacity(0.4),
+              fontSize: 14,
+            ),
+          ),
+          keyboardType: keyboardType,
+          maxLines: maxLines,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'This field is required';
+            }
+            return null;
+          },
         ),
       ],
     );
   }
 
-  // Reusable text field widget with enhanced decoration.
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-    int maxLines = 1,
-  }) {
-    return TextFormField(
-      controller: controller,
-      enabled: true,
-      style: TextStyle(color: Colors.grey.shade800),
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: Colors.blue.shade600),
-        labelText: label,
-        labelStyle: TextStyle(color: Colors.grey.shade600),
-        floatingLabelStyle: TextStyle(color: Colors.blue.shade600),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.blue.shade600, width: 1.5),
-        ),
-        filled: true,
-        fillColor: Colors.grey.shade50,
-        contentPadding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-      ),
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      validator: (value) => value == null || value.trim().isEmpty
-          ? 'This field is required'
-          : null,
-    );
-  }
-
-  // Birthday picker field with formatted date.
+  // Redesigned birthday picker field with formatted date
   Widget _buildBirthdayPicker() {
-    return GestureDetector(
+    return InkWell(
       onTap: _selectBirthday,
+      borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          color: surfaceColor,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _birthday != null ? accentColor : dividerColor,
+            width: 1,
+          ),
         ),
         child: Row(
           children: [
-            Icon(FeatherIcons.calendar, size: 20, color: Colors.blue.shade600),
+            Icon(
+              FeatherIcons.calendar,
+              size: 18,
+              color: yellowColor,
+            ),
             SizedBox(width: 16),
             Text(
               _birthday != null
-                  ? DateFormat('dd MMM yyyy').format(_birthday!)
+                  ? DateFormat('MMMM d, yyyy').format(_birthday!)
                   : "Select your birthday",
-              style: TextStyle(
+              style: GoogleFonts.poppins(
                 color: _birthday != null
-                    ? Colors.grey.shade800
-                    : Colors.grey.shade500,
-                fontSize: 16,
+                    ? textDarkColor
+                    : textDarkColor.withOpacity(0.4),
+                fontSize: 15,
+              ),
+            ),
+            Spacer(),
+            Icon(
+              Icons.arrow_drop_down,
+              color: yellowColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Redesigned save button with loading state
+  Widget _buildSaveButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton(
+        onPressed: _isUpdating ? null : _updateProfile,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: greenColor,
+          disabledBackgroundColor: greenColor.withOpacity(0.4),
+          foregroundColor: textLightColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          elevation: 0,
+        ),
+        child: _isUpdating
+            ? Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                color: accentColor,
+                strokeWidth: 2,
+              ),
+            ),
+            SizedBox(width: 12),
+            Text(
+              'SAVING CHANGES...',
+              style: GoogleFonts.poppins(
+                color: textLightColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        )
+            : Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(FeatherIcons.save, size: 18),
+            SizedBox(width: 12),
+            Text(
+              'SAVE PROFILE',
+              style: GoogleFonts.poppins(
+                color: textLightColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1,
               ),
             ),
           ],
@@ -405,50 +721,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // Save button with a loading spinner when updating.
-  Widget _buildSaveButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: _isUpdating ? null : _updateProfile,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue.shade600,
-          padding: EdgeInsets.symmetric(vertical: 18),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 2,
-        ),
-        icon: _isUpdating
-            ? SizedBox.shrink()
-            : Icon(FeatherIcons.save, size: 20, color: Colors.white),
-        label: _isUpdating
-            ? LoadingSpinner(color: Colors.white)
-            : Text(
-          'SAVE CHANGES',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.8,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// A simple adaptive loading spinner widget.
-class LoadingSpinner extends StatelessWidget {
-  final Color? color;
-  const LoadingSpinner({this.color});
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: CircularProgressIndicator.adaptive(
-        valueColor: AlwaysStoppedAnimation<Color>(
-          color ?? Colors.blue.shade600,
-        ),
-      ),
-    );
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _locationController.dispose();
+    _bioController.dispose();
+    super.dispose();
   }
 }
