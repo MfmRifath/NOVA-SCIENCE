@@ -26,6 +26,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   bool _isLoading = false;
   bool _obscureText = true;
+  bool _isKeyboardVisible = false;
 
   Future<void> _signInWithEmail() async {
     if (!_formKey.currentState!.validate()) return;
@@ -87,12 +88,38 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   Future<void> _updateLoginStatus(User user, bool isLoggedIn) async {
-    await _firestore.collection('users').doc(user.uid).set({
-      'email': user.email,
-      'name': user.displayName,
-      'profilePic': user.photoURL,
-      'isLoggedIn': isLoggedIn,
-    }, SetOptions(merge: true));
+    // First get existing user data to preserve it
+    DocumentSnapshot userDoc = await _firestore.collection('users').doc(user.uid).get();
+
+    Map<String, dynamic> userData = {};
+
+    // If document exists, use its data as a base
+    if (userDoc.exists && userDoc.data() != null) {
+      userData = userDoc.data() as Map<String, dynamic>;
+    }
+
+    // Update required fields
+    userData['email'] = user.email;
+
+    // Only set name if it doesn't exist or is null
+    if (userData['name'] == null) {
+      userData['name'] = user.displayName ?? user.email?.split('@')[0] ?? 'User';
+    }
+
+    // Update profile pic only if provided
+    if (user.photoURL != null) {
+      userData['profileImageUrl'] = user.photoURL;
+    }
+
+    // Update both login status fields for consistency
+    userData['isLoggedIn'] = isLoggedIn;
+    userData['isLoggedin'] = isLoggedIn;
+
+    // Write back to Firestore
+    await _firestore.collection('users').doc(user.uid).set(
+        userData,
+        SetOptions(merge: true)
+    );
   }
 
   void _showSnackBar(String message) {
@@ -105,6 +132,17 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final MediaQueryData mediaQueryData = MediaQuery.of(context);
+      setState(() {
+        _isKeyboardVisible = mediaQueryData.viewInsets.bottom > 0;
+      });
+    });
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -114,7 +152,21 @@ class _SignInScreenState extends State<SignInScreen> {
   @override
   Widget build(BuildContext context) {
     final Size screenSize = MediaQuery.of(context).size;
-    final bool isLargeScreen = screenSize.width > 600;
+    final double screenWidth = screenSize.width;
+    final double screenHeight = screenSize.height;
+    final bool isLargeScreen = screenWidth > 600;
+    final bool isLandscape = screenWidth > screenHeight;
+
+    // Update keyboard visibility
+    _isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+
+    // Adaptive values based on screen size
+    final double headerHeight = _isKeyboardVisible ? screenHeight * 0.1 : screenHeight * 0.3;
+    final double formWidth = isLargeScreen
+        ? (isLandscape ? screenWidth * 0.5 : 460)
+        : screenWidth * 0.9;
+    final double horizontalPadding = isLargeScreen ? 32 : 16;
+    final double verticalSpacing = isLargeScreen ? 32 : 24;
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
@@ -122,67 +174,79 @@ class _SignInScreenState extends State<SignInScreen> {
         onTap: () => FocusScope.of(context).unfocus(),
         child: Stack(
           children: [
-            // Header background
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: screenSize.height * 0.3,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [greenColor, yellowColor],
+            // Header background - hide when keyboard is visible on small screens
+            if (!(_isKeyboardVisible && !isLargeScreen))
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: headerHeight,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [greenColor, yellowColor],
+                    ),
                   ),
-                ),
-                child: Stack(
-                  children: [
-                    // Subtle pattern overlay
-                    Opacity(
-                      opacity: 0.05,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          image: DecorationImage(
-                            image: AssetImage('assets/images/grid_pattern.png'),
-                            repeat: ImageRepeat.repeat,
+                  child: Stack(
+                    children: [
+                      // Subtle pattern overlay
+                      Opacity(
+                        opacity: 0.05,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            image: DecorationImage(
+                              image: AssetImage('assets/images/grid_pattern.png'),
+                              repeat: ImageRepeat.repeat,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    // Accent line
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Container(
-                        width: screenSize.width * 0.3,
-                        height: 6,
-                        color: accentColor.withOpacity(0.3),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Main content
-            SafeArea(
-              child: SingleChildScrollView(
-                physics: ClampingScrollPhysics(),
-                child: SizedBox(
-                  height: screenSize.height - MediaQuery.of(context).padding.top,
-                  child: Column(
-                    children: [
-                      // Header with logo and title
-                      _buildHeader(isLargeScreen),
-
-                      // Sign in form
-                      Expanded(
-                        child: _buildSignInForm(isLargeScreen),
+                      // Accent line
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          width: screenWidth * 0.3,
+                          height: 6,
+                          color: accentColor.withOpacity(0.3),
+                        ),
                       ),
                     ],
                   ),
                 ),
+              ),
+
+            // Main content with scroll view
+            SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: IntrinsicHeight(
+                        child: Column(
+                          children: [
+                            // Header with logo and title - hide when keyboard is visible on small screens
+                            if (!(_isKeyboardVisible && !isLargeScreen))
+                              _buildHeader(isLargeScreen, isLandscape),
+
+                            // Sign in form
+                            Expanded(
+                              child: Center(
+                                child: _buildSignInForm(isLargeScreen, isLandscape, formWidth, horizontalPadding, verticalSpacing),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
 
@@ -202,13 +266,13 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  Widget _buildHeader(bool isLargeScreen) {
+  Widget _buildHeader(bool isLargeScreen, bool isLandscape) {
     return Container(
       padding: EdgeInsets.only(
-        top: 20,
-        bottom: 40,
-        left: 24,
-        right: 24,
+        top: isLargeScreen ? 20 : 16,
+        bottom: isLargeScreen ? 40 : 24,
+        left: isLargeScreen ? 24 : 16,
+        right: isLargeScreen ? 24 : 16,
       ),
       child: Column(
         children: [
@@ -218,15 +282,15 @@ class _SignInScreenState extends State<SignInScreen> {
             children: [
               Image.asset(
                 'assets/images/logo.png',
-                width: 40,
-                height: 40,
+                width: isLargeScreen ? 40 : 32,
+                height: isLargeScreen ? 40 : 32,
               ),
-              SizedBox(width: 16),
+              SizedBox(width: isLargeScreen ? 16 : 12),
               Text(
-                'NOVA SCIENCE',
+                'NOVA LEARN',
                 style: GoogleFonts.roboto(
                   color: Colors.white,
-                  fontSize: 20,
+                  fontSize: isLargeScreen ? 20 : 18,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.2,
                 ),
@@ -238,10 +302,11 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  Widget _buildSignInForm(bool isLargeScreen) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: 24),
+  Widget _buildSignInForm(bool isLargeScreen, bool isLandscape, double formWidth, double horizontalPadding, double verticalSpacing) {
+    final double bottomPadding = _isKeyboardVisible ? 16 : 24;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: Form(
         key: _formKey,
         child: Column(
@@ -250,8 +315,8 @@ class _SignInScreenState extends State<SignInScreen> {
           children: [
             // Form container
             Container(
-              width: isLargeScreen ? 460 : double.infinity,
-              padding: EdgeInsets.all(32),
+              width: formWidth,
+              padding: EdgeInsets.all(isLargeScreen ? 32 : 24),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
@@ -270,7 +335,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   Text(
                     'Sign In',
                     style: GoogleFonts.roboto(
-                      fontSize: 24,
+                      fontSize: isLargeScreen ? 24 : 22,
                       fontWeight: FontWeight.w700,
                       color: greenColor,
                     ),
@@ -281,12 +346,12 @@ class _SignInScreenState extends State<SignInScreen> {
                   Text(
                     'Enter your credentials to access your account',
                     style: GoogleFonts.roboto(
-                      fontSize: 14,
+                      fontSize: isLargeScreen ? 14 : 13,
                       color: Colors.grey.shade600,
                       height: 1.4,
                     ),
                   ),
-                  SizedBox(height: 32),
+                  SizedBox(height: verticalSpacing),
 
                   // Email field
                   _buildInputField(
@@ -304,7 +369,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       return null;
                     },
                   ),
-                  SizedBox(height: 24),
+                  SizedBox(height: isLargeScreen ? 24 : 20),
 
                   // Password field
                   _buildInputField(
@@ -334,94 +399,99 @@ class _SignInScreenState extends State<SignInScreen> {
                       child: Text(
                         'Forgot Password?',
                         style: GoogleFonts.roboto(
-                          fontSize: 14,
+                          fontSize: isLargeScreen ? 14 : 13,
                           color: yellowColor,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
                   ),
-                  SizedBox(height: 32),
+                  SizedBox(height: verticalSpacing),
 
                   // Sign in button
                   _buildPrimaryButton(
                     'SIGN IN',
                     _signInWithEmail,
+                    isLargeScreen,
                   ),
-                  SizedBox(height: 24),
+                  SizedBox(height: verticalSpacing),
 
-                  // Or divider
-                  Row(
-                    children: [
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'OR',
-                          style: GoogleFonts.roboto(
-                            fontSize: 14,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ),
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
-                    ],
-                  ),
-                  SizedBox(height: 24),
-
-                  // Google sign in button
-                  _buildSocialButton(
-                    'SIGN IN WITH GOOGLE',
-                    FontAwesomeIcons.google,
-                    _signInWithGoogle,
-                  ),
+                  // // Or divider
+                  // Row(
+                  //   children: [
+                  //     Expanded(child: Divider(color: Colors.grey.shade300)),
+                  //     Padding(
+                  //       padding: EdgeInsets.symmetric(horizontal: 16),
+                  //       child: Text(
+                  //         'OR',
+                  //         style: GoogleFonts.roboto(
+                  //           fontSize: isLargeScreen ? 14 : 13,
+                  //           color: Colors.grey.shade600,
+                  //         ),
+                  //       ),
+                  //     ),
+                  //     Expanded(child: Divider(color: Colors.grey.shade300)),
+                  //   ],
+                  // ),
+                  // SizedBox(height: verticalSpacing),
+                  //
+                  // // Google sign in button
+                  // _buildSocialButton(
+                  //   'SIGN IN WITH GOOGLE',
+                  //   FontAwesomeIcons.google,
+                  //   _signInWithGoogle,
+                  //   isLargeScreen,
+                  // ),
                 ],
               ),
             ),
 
-            SizedBox(height: 32),
+            // Only show these if keyboard is not visible or on large screens
+            if (!_isKeyboardVisible || isLargeScreen) ...[
+              SizedBox(height: verticalSpacing),
 
-            // Sign up option
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  "Don't have an account?",
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pushNamed(context, '/signUp'),
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: Size(0, 0),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    'Register',
+              // Sign up option
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    "Don't have an account?",
                     style: GoogleFonts.roboto(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: maroonColor,
+                      fontSize: isLargeScreen ? 14 : 13,
+                      color: Colors.grey.shade700,
                     ),
                   ),
-                ),
-              ],
-            ),
+                  TextButton(
+                    onPressed: () => Navigator.pushNamed(context, '/signUp'),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size(0, 0),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      'Register',
+                      style: GoogleFonts.roboto(
+                        fontSize: isLargeScreen ? 14 : 13,
+                        fontWeight: FontWeight.w600,
+                        color: maroonColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
 
-            // Footer
-            Padding(
-              padding: EdgeInsets.only(top: 24, bottom: 16),
-              child: Text(
-                '© 2025 NOVA SCIENCE. All Rights Reserved.',
-                style: GoogleFonts.roboto(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
+              // Footer
+              Padding(
+                padding: EdgeInsets.only(top: 24, bottom: bottomPadding),
+                child: Text(
+                  '© 2025 NOVA SCIENCE. All Rights Reserved.',
+                  style: GoogleFonts.roboto(
+                    fontSize: isLargeScreen ? 12 : 11,
+                    color: Colors.grey.shade600,
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -436,13 +506,15 @@ class _SignInScreenState extends State<SignInScreen> {
         TextInputType keyboardType = TextInputType.text,
         String? Function(String?)? validator,
       }) {
+    final bool isLargeScreen = MediaQuery.of(context).size.width > 600;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: GoogleFonts.roboto(
-            fontSize: 14,
+            fontSize: isLargeScreen ? 14 : 13,
             fontWeight: FontWeight.w600,
             color: greenColor,
           ),
@@ -453,13 +525,16 @@ class _SignInScreenState extends State<SignInScreen> {
           obscureText: isPassword ? _obscureText : false,
           keyboardType: keyboardType,
           style: GoogleFonts.roboto(
-            fontSize: 15,
+            fontSize: isLargeScreen ? 15 : 14,
             color: Colors.grey.shade800,
           ),
           decoration: InputDecoration(
             filled: true,
             fillColor: Colors.grey.shade50,
-            contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            contentPadding: EdgeInsets.symmetric(
+                vertical: isLargeScreen ? 14 : 12,
+                horizontal: isLargeScreen ? 16 : 12
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(4),
               borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
@@ -476,13 +551,13 @@ class _SignInScreenState extends State<SignInScreen> {
               borderRadius: BorderRadius.circular(4),
               borderSide: BorderSide(color: maroonColor, width: 1),
             ),
-            prefixIcon: Icon(icon, color: yellowColor, size: 20),
+            prefixIcon: Icon(icon, color: yellowColor, size: isLargeScreen ? 20 : 18),
             suffixIcon: isPassword
                 ? IconButton(
               icon: Icon(
                 _obscureText ? Icons.visibility_outlined : Icons.visibility_off_outlined,
                 color: yellowColor,
-                size: 20,
+                size: isLargeScreen ? 20 : 18,
               ),
               onPressed: () => setState(() => _obscureText = !_obscureText),
             )
@@ -494,10 +569,10 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  Widget _buildPrimaryButton(String label, VoidCallback onPressed) {
+  Widget _buildPrimaryButton(String label, VoidCallback onPressed, bool isLargeScreen) {
     return SizedBox(
       width: double.infinity,
-      height: 48,
+      height: isLargeScreen ? 48 : 44,
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
@@ -511,7 +586,7 @@ class _SignInScreenState extends State<SignInScreen> {
         child: Text(
           label,
           style: GoogleFonts.roboto(
-            fontSize: 15,
+            fontSize: isLargeScreen ? 15 : 14,
             fontWeight: FontWeight.w600,
             letterSpacing: 1,
           ),
@@ -520,10 +595,10 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  Widget _buildSocialButton(String label, IconData icon, VoidCallback onPressed) {
+  Widget _buildSocialButton(String label, IconData icon, VoidCallback onPressed, bool isLargeScreen) {
     return SizedBox(
       width: double.infinity,
-      height: 48,
+      height: isLargeScreen ? 48 : 44,
       child: OutlinedButton.icon(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
@@ -533,11 +608,11 @@ class _SignInScreenState extends State<SignInScreen> {
             borderRadius: BorderRadius.circular(4),
           ),
         ),
-        icon: FaIcon(icon, size: 18),
+        icon: FaIcon(icon, size: isLargeScreen ? 18 : 16),
         label: Text(
           label,
           style: GoogleFonts.roboto(
-            fontSize: 14,
+            fontSize: isLargeScreen ? 14 : 13,
             fontWeight: FontWeight.w500,
             letterSpacing: 0.5,
           ),

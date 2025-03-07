@@ -134,7 +134,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               ),
               SizedBox(width: 12),
               Text(
-                'NOVA SCIENCE',
+                'NOVA LEARN',
                 style: GoogleFonts.roboto(
                   color: Colors.white,
                   fontSize: 18,
@@ -180,66 +180,67 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   }
 
   Widget _buildOnboardingPage(Size screenSize, Map<String, String> data) {
-    return Column(
-      children: [
-        // Top section with illustration
-        Expanded(
-          flex: 4,
-          child: Container(
-            margin: EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-            decoration: BoxDecoration(
-              color: darkGreen.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: darkGreen.withOpacity(0.1),
-                width: 1,
-              ),
-            ),
-            child: Center(
-              child: Image.asset(
-                'assets/images/${data['image']}.png',
-                fit: BoxFit.contain,
-                height: screenSize.height * 0.3,
-              ),
-            ),
-          ),
+    // Wrap the entire content in a SingleChildScrollView to make it scrollable
+    return SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: screenSize.height - 160, // Subtract header and bottom navigation height
         ),
-
-        // Bottom section with content
-        Expanded(
-          flex: 3,
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Section indicator
-                Container(
-                  width: 60,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: maroon,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+        child: Column(
+          children: [
+            // Top section with illustration
+            Container(
+              margin: EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+              height: screenSize.height * 0.35, // Fixed height for the image container
+              decoration: BoxDecoration(
+                color: darkGreen.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: darkGreen.withOpacity(0.1),
+                  width: 1,
                 ),
-                SizedBox(height: 20),
-
-                // Heading
-                Text(
-                  data['heading'] ?? '',
-                  style: GoogleFonts.roboto(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
-                  ),
+              ),
+              child: Center(
+                child: Image.asset(
+                  'assets/images/${data['image']}.png',
+                  fit: BoxFit.contain,
+                  height: screenSize.height * 0.3,
                 ),
-                SizedBox(height: 16),
+              ),
+            ),
 
-                // Description
-                Expanded(
-                  child: Text(
+            // Bottom section with content
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Section indicator
+                  Container(
+                    width: 60,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: maroon,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  SizedBox(height: 20),
+
+                  // Heading
+                  Text(
+                    data['heading'] ?? '',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+
+                  // Description
+                  Text(
                     data['description'] ?? '',
                     style: GoogleFonts.roboto(
                       color: Colors.white.withOpacity(0.9),
@@ -248,12 +249,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                       height: 1.5,
                     ),
                   ),
-                ),
-              ],
+                  // Add extra padding at the bottom to ensure content is not covered by bottom navigation
+                  SizedBox(height: 20),
+                ],
+              ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 

@@ -292,7 +292,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
                     // Copyright or version text
                     Text(
-                      '© Nova Science 2025',
+                      '© NOVA LEARN 2025',
                       style: GoogleFonts.roboto(
                         fontSize: 12,
                         color: Colors.white.withOpacity(0.6),

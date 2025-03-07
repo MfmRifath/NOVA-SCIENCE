@@ -117,7 +117,7 @@ class NovaScience extends StatelessWidget {
             builder = (context) => EditProfileScreen();
             break;
           case Routes.dashboardOverview:
-            builder = (context) => DashboardOverviewScreen();
+            builder = (context) => AdminDashboard();
             break;
           case Routes.userManagement:
             builder = (context) => UserManagementScreen();

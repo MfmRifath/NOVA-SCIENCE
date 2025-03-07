@@ -10,7 +10,7 @@ class CustomUser {
   String? location;
   DateTime? birthday;
   String? bio;
-  bool? isLoggedin;
+  bool? isLoggedIn;
   DateTime? registeredDate;
   late final List<Enrollment>? enrollments;
 
@@ -24,7 +24,7 @@ class CustomUser {
     this.location,
     this.birthday,
     this.bio,
-    this.isLoggedin,
+    this.isLoggedIn,
     this.registeredDate,
     this.enrollments,
   });
@@ -44,23 +44,12 @@ class CustomUser {
       location: data['location'] as String?,
       birthday: data['birthday'] != null ? (data['birthday'] as Timestamp).toDate() : null,
       bio: data['bio'] as String?,
-      isLoggedin: data['isLoggedin'] as bool?,
+      isLoggedIn: data['isLoggedin'] as bool?,
       registeredDate: data['registeredDate'] != null ? (data['registeredDate'] as Timestamp).toDate() : null,
       enrollments: convertEnrollments(data['enrolledCourses']),
     );
   }
 
-  static List<Enrollment>? convertEnrollments(dynamic firestoreData) {
-    if (firestoreData == null) return null;
-
-    return (firestoreData as List<dynamic>).map((e) {
-      if (e is Map<String, dynamic>) {
-        return Enrollment.fromMap(e);
-      } else {
-        throw Exception('Invalid enrollment format in Firestore');
-      }
-    }).toList();
-  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -72,10 +61,38 @@ class CustomUser {
       'location': location,
       'birthday': birthday != null ? Timestamp.fromDate(birthday!) : null,
       'bio': bio,
-      'isLoggedin': isLoggedin,
+      'isLoggedin': isLoggedIn,
       'registeredDate': registeredDate != null ? Timestamp.fromDate(registeredDate!) : null,
       'enrolledCourses': enrollments?.map((e) => e.toMap()).toList() ?? [],
     };
+  }
+  static List<Enrollment>? convertEnrollments(dynamic firestoreData) {
+    if (firestoreData == null) return [];
+
+    try {
+      List<Enrollment> enrollments = [];
+
+      for (var item in firestoreData) {
+        // Handle simple string IDs
+        if (item is String) {
+          enrollments.add(Enrollment(
+            courseId: item,
+            enrollmentDate: DateTime.now(),
+            endDate: DateTime.now().add(Duration(days: 365)),
+          ));
+        }
+        // Handle map format
+        else if (item is Map<String, dynamic>) {
+          enrollments.add(Enrollment.fromMap(item));
+        }
+      }
+
+      return enrollments;
+    } catch (e) {
+      print('Error converting enrollments: $e');
+      // Return empty list instead of null to prevent further errors
+      return [];
+    }
   }
 }
 

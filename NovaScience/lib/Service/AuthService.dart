@@ -71,7 +71,7 @@ class AuthService with ChangeNotifier {
         location: location,
         birthday: birthday?.toDate(),
         bio: bio,
-        isLoggedin: true,
+        isLoggedIn: true,
         registeredDate: DateTime.now(),
         enrollments: [],
       );
@@ -137,7 +137,7 @@ class AuthService with ChangeNotifier {
         location: location,
         birthday: birthday?.toDate(),
         bio: bio,
-        isLoggedin: true,
+        isLoggedIn: true,
         registeredDate: DateTime.now(),
         enrollments: [],
       );
@@ -179,16 +179,51 @@ class AuthService with ChangeNotifier {
       User? user = _auth.currentUser;
       if (user != null) {
         DocumentSnapshot doc = await _firestore.collection('users').doc(user.uid).get();
-        print('Fetched document: ${doc.data()}'); // Debug output
+
+        // Debug logging
+        print('Fetched document ID: ${doc.id}');
+        print('Document exists: ${doc.exists}');
+
         if (doc.exists) {
-          _user = CustomUser.fromMap(doc.data() as Map<String, dynamic>, doc.id);
-          notifyListeners();
-          return _user;
+          Map<String, dynamic> userData = doc.data() as Map<String, dynamic>;
+          print('User data retrieved: $userData'); // Log full user data
+
+          // Create and return the user object
+          try {
+            _user = CustomUser.fromMap(userData, doc.id);
+            print('User successfully created: ${_user?.name}');
+            notifyListeners();
+            return _user;
+          } catch (e) {
+            print('Error in CustomUser.fromMap: $e');
+
+            // Fallback approach - create the user manually
+            _user = CustomUser(
+              id: doc.id,
+              name: userData['name'],
+              email: userData['email'],
+              profileImageUrl: userData['profileImageUrl'],
+              role: userData['role'],
+              phoneNumber: userData['phoneNumber'],
+              location: userData['location'],
+              birthday: userData['birthday'] != null ?
+              (userData['birthday'] as Timestamp).toDate() : null,
+              bio: userData['bio'],
+              isLoggedIn: userData['isLoggedin'], // Note: use the exact field name from Firestore
+              registeredDate: userData['registeredDate'] != null ?
+              (userData['registeredDate'] as Timestamp).toDate() : null,
+              enrollments: CustomUser.convertEnrollments(userData['enrolledCourses']),
+            );
+
+            notifyListeners();
+            return _user;
+          }
         }
       }
       return null;
     } catch (e) {
-      print('Error fetching current user: $e');
+      print('Error in getCurrentUser: $e');
+      print('Stack trace: ${StackTrace.current}');
       return null;
     }
   }
@@ -240,17 +275,22 @@ class AuthService with ChangeNotifier {
     try {
       User? user = currentUser;
       if (user != null) {
+        // Update both login status fields for consistency
         await _firestore.collection('users').doc(user.uid).update({
           'isLoggedin': false,
+          'isLoggedIn': false,
         });
+
+        // For debugging
+        DocumentSnapshot doc = await _firestore.collection('users').doc(user.uid).get();
+        print('User document after sign out: ${doc.data()}');
       }
 
       await _auth.signOut();
-      _user = null; // Clear local user data
-      notifyListeners(); // Notify after signing out
+      _user = null;
+      notifyListeners();
     } catch (e) {
       print("Error signing out: $e");
-      // Optionally, handle errors by rethrowing or using another mechanism
     }
   }
   /// Retrieves the current user's email.

@@ -183,8 +183,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   // Build user list in UI
   @override
   Widget build(BuildContext context) {
-    final loggedInUsers = users.where((user) => user.isLoggedin ?? false).toList();
-    final otherUsers = users.where((user) => user.isLoggedin == false).toList();
+    final loggedInUsers = users.where((user) => user.isLoggedIn ?? false).toList();
+    final otherUsers = users.where((user) => user.isLoggedIn == false).toList();
 
     return Scaffold(
       backgroundColor: surfaceColor,
@@ -370,7 +370,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Widget _buildUserTile(CustomUser user, Animation<double> animation, int index) {
-    final bool isLoggedIn = user.isLoggedin ?? false;
+    final bool isLoggedIn = user.isLoggedIn ?? false;
 
     return SizeTransition(
       sizeFactor: animation,

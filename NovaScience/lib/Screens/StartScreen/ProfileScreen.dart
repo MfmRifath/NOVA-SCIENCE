@@ -132,11 +132,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                         SizedBox(height: 24),
 
-                        _buildSectionTitle("Account Settings"),
-                        SizedBox(height: 16),
-                        _buildAccountSettingsCard(),
-
-                        SizedBox(height: 40),
+                        // _buildSectionTitle("Account Settings"),
+                        // SizedBox(height: 16),
+                        // _buildAccountSettingsCard(),
+                        //
+                        // SizedBox(height: 40),
 
                         // Action buttons
                         _buildActionButtons(),

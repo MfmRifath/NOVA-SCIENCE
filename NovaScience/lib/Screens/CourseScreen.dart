@@ -328,8 +328,8 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
       width: double.infinity,
       child: AspectRatio(
         aspectRatio: 16 / 9,
-        child: _youtubeController != null && (isEnrolled || isAdmin)
-            ? player
+        child: _youtubeController != null
+            ? player  // Always show player if controller is initialized
             : _course!.sections.isNotEmpty && _course!.sections.first.videos.isNotEmpty
             ? Stack(
           alignment: Alignment.center,
@@ -345,24 +345,25 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
                 size: 64,
               ),
             ),
-            // Play button overlay
-            if (!isEnrolled && !isAdmin)
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: accentColor.withOpacity(0.8),
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: Icon(
-                    Icons.lock_outline,
-                    color: greenColor,
-                    size: 32,
-                  ),
-                  onPressed: () => _showEnrollPrompt(),
-                ),
+            // Play button for first video (available to everyone)
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.8),
+                shape: BoxShape.circle,
               ),
+              child: IconButton(
+                icon: Icon(
+                  Icons.play_arrow,
+                  color: greenColor,
+                  size: 32,
+                ),
+                onPressed: () {
+                  _initializeYoutubePlayer(_course!.sections.first.videos.first.videoUrl);
+                },
+              ),
+            ),
           ],
         )
             : Container(
@@ -380,7 +381,6 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
       ),
     );
   }
-
   Widget _buildOverview(Course course) {
     final String adminPhoneNumber = course.medium == 'Tamil'
         ? "+94757439885"
@@ -483,6 +483,12 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
                   icon: Icons.money_outlined,
                   label: 'Price',
                   value: 'Rs. ${course.price!.toStringAsFixed(0)}',
+                ),
+                SizedBox(height: 12),
+                _buildInfoRow(
+                  icon: Icons.vpn_key_outlined,
+                  label: 'Course Type',
+                  value: course.status == 'free' ? 'Free' : 'Premium',
                 ),
 
                 // Rating summary
@@ -642,6 +648,48 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
           ),
           SizedBox(height: 16),
 
+          // Course type notice
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: course.status == 'free'
+                  ? Colors.green.withOpacity(0.1)
+                  : Colors.orange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                  color: course.status == 'free'
+                      ? Colors.green.withOpacity(0.3)
+                      : Colors.orange.withOpacity(0.3)
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  course.status == 'free'
+                      ? Icons.check_circle_outline
+                      : Icons.info_outline,
+                  color: course.status == 'free'
+                      ? Colors.green
+                      : Colors.orange,
+                  size: 20,
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    course.status == 'free'
+                        ? 'This is a free course. You can enroll directly.'
+                        : 'This is a premium course. Please contact admin to enroll.',
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: 16),
+
           // Admin contact section
           Container(
             padding: EdgeInsets.all(16),
@@ -747,7 +795,7 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
             ),
           ),
 
-          // Self-enroll button for free courses
+          // Self-enroll button for free courses only
           if (course.status == 'free') ...[
             SizedBox(height: 20),
             SizedBox(
@@ -924,218 +972,218 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
 
   Widget _buildSectionCard(Section section, int sectionIndex, String courseId) {
     return Container(
-        margin: EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(4),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Theme(
-        data: Theme.of(context).copyWith(
-      dividerColor: Colors.transparent,
-      colorScheme: ColorScheme.light(
-        primary: yellowColor,
+      margin: EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
-    ),
-    child: ExpansionTile(
-    leading: Icon(
-    Icons.folder_outlined,
-    color: yellowColor,
-    ),
-    title: Row(
-    children: [
-    Expanded(
-    child: Text(
-    section.sectionTitle ?? 'Untitled Section',
-    style: GoogleFonts.roboto(
-    fontSize: 16,
-    fontWeight: FontWeight.w500,
-    color: textColor,
-    ),
-    ),
-    ),
-    if (isAdmin) ...[
-    IconButton(
-    icon: Icon(Icons.edit_outlined, size: 18, color: yellowColor),
-    onPressed: () => _showEditSectionDialog(section, sectionIndex),
-    tooltip: 'Edit Section',
-    ),
-    IconButton(
-    icon: Icon(Icons.delete_outline, size: 18, color: maroonColor),
-    onPressed: () => _confirmDeleteSection(sectionIndex, section),
-    tooltip: 'Delete Section',
-    ),
-    ],
-    ],
-    ),
-    children: [
-    // Videos list
-    if (section.videos.isNotEmpty)
-    ListView.builder(
-    shrinkWrap: true,
-    physics: NeverScrollableScrollPhysics(),
-    itemCount: section.videos.length,
-    itemBuilder: (context, videoIndex) {
-      Video video = section.videos[videoIndex];
-      bool isFirstVideo = sectionIndex == 0 && videoIndex == 0;
-      bool canAccessVideo = isFirstVideo || isEnrolled || isAdmin;
-
-      return ListTile(
-        contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        leading: Icon(
-          isFirstVideo || canAccessVideo ? Icons.play_circle_outline : Icons.lock_outline,
-          color: isFirstVideo || canAccessVideo ? accentColor : Colors.grey,
-          size: 24,
-        ),
-        title: Text(
-          video.title ?? 'Untitled Video',
-          style: GoogleFonts.roboto(
-            fontWeight: FontWeight.w400,
-            fontSize: 14,
-            color: textColor,
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+          colorScheme: ColorScheme.light(
+            primary: yellowColor,
           ),
         ),
-        subtitle: Text(
-          isFirstVideo ? 'Free Preview' : (canAccessVideo ? 'Available' : 'Locked Content'),
-          style: GoogleFonts.roboto(
-            fontSize: 12,
-            color: isFirstVideo ? accentColor : (canAccessVideo ? successColor : Colors.grey),
+        child: ExpansionTile(
+          leading: Icon(
+            Icons.folder_outlined,
+            color: yellowColor,
           ),
-        ),
-        onTap: () {
-          if (canAccessVideo) {
-            _playVideo(video.videoUrl ?? '', sectionIndex, videoIndex);
-          } else {
-            _showEnrollPrompt();
-          }
-        },
-        trailing: isAdmin
-            ? Row(
-          mainAxisSize: MainAxisSize.min,
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  section.sectionTitle ?? 'Untitled Section',
+                  style: GoogleFonts.roboto(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: textColor,
+                  ),
+                ),
+              ),
+              if (isAdmin) ...[
+                IconButton(
+                  icon: Icon(Icons.edit_outlined, size: 18, color: yellowColor),
+                  onPressed: () => _showEditSectionDialog(section, sectionIndex),
+                  tooltip: 'Edit Section',
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete_outline, size: 18, color: maroonColor),
+                  onPressed: () => _confirmDeleteSection(sectionIndex, section),
+                  tooltip: 'Delete Section',
+                ),
+              ],
+            ],
+          ),
           children: [
-            IconButton(
-              icon: Icon(Icons.edit_outlined, size: 18, color: yellowColor),
-              onPressed: () => _showEditVideoDialog(section.sectionTitle!, video, videoIndex),
-              tooltip: 'Edit Video',
-            ),
-            IconButton(
-              icon: Icon(Icons.delete_outline, size: 18, color: maroonColor),
-              onPressed: () => _deleteVideo(widget.courseId, section.sectionTitle ?? '', videoIndex),
-              tooltip: 'Delete Video',
-            ),
-          ],
-        )
-            : null,
-      );
-    },
-    ),
+            // Videos list
+            if (section.videos.isNotEmpty)
+              ListView.builder(
+                shrinkWrap: true,
+                physics: NeverScrollableScrollPhysics(),
+                itemCount: section.videos.length,
+                itemBuilder: (context, videoIndex) {
+                  Video video = section.videos[videoIndex];
+                  bool isFirstVideo = sectionIndex == 0 && videoIndex == 0;
+                  bool canAccessVideo = isFirstVideo || isEnrolled || isAdmin;
 
-      // PDFs list
-      if (section.pdfs.isNotEmpty)
-        ListView.builder(
-          shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          itemCount: section.pdfs.length,
-          itemBuilder: (context, pdfIndex) {
-            final pdf = section.pdfs[pdfIndex];
-            return ListTile(
-              contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              leading: Icon(
-                Icons.picture_as_pdf_outlined,
-                color: maroonColor,
-                size: 24,
+                  return ListTile(
+                    contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    leading: Icon(
+                      isFirstVideo || canAccessVideo ? Icons.play_circle_outline : Icons.lock_outline,
+                      color: isFirstVideo || canAccessVideo ? accentColor : Colors.grey,
+                      size: 24,
+                    ),
+                    title: Text(
+                      video.title ?? 'Untitled Video',
+                      style: GoogleFonts.roboto(
+                        fontWeight: FontWeight.w400,
+                        fontSize: 14,
+                        color: textColor,
+                      ),
+                    ),
+                    subtitle: Text(
+                      isFirstVideo ? 'Free Preview' : (canAccessVideo ? 'Available' : 'Locked Content'),
+                      style: GoogleFonts.roboto(
+                        fontSize: 12,
+                        color: isFirstVideo ? accentColor : (canAccessVideo ? successColor : Colors.grey),
+                      ),
+                    ),
+                    onTap: () {
+                      if (canAccessVideo) {
+                        _playVideo(video.videoUrl ?? '', sectionIndex, videoIndex);
+                      } else {
+                        _showEnrollPrompt();
+                      }
+                    },
+                    trailing: isAdmin
+                        ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.edit_outlined, size: 18, color: yellowColor),
+                          onPressed: () => _showEditVideoDialog(section.sectionTitle!, video, videoIndex),
+                          tooltip: 'Edit Video',
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.delete_outline, size: 18, color: maroonColor),
+                          onPressed: () => _deleteVideo(widget.courseId, section.sectionTitle ?? '', videoIndex),
+                          tooltip: 'Delete Video',
+                        ),
+                      ],
+                    )
+                        : null,
+                  );
+                },
               ),
-              title: Text(
-                pdf.title ?? "Untitled PDF",
-                style: GoogleFonts.roboto(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                  color: textColor,
-                ),
+
+            // PDFs list
+            if (section.pdfs.isNotEmpty)
+              ListView.builder(
+                shrinkWrap: true,
+                physics: NeverScrollableScrollPhysics(),
+                itemCount: section.pdfs.length,
+                itemBuilder: (context, pdfIndex) {
+                  final pdf = section.pdfs[pdfIndex];
+                  return ListTile(
+                    contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    leading: Icon(
+                      Icons.picture_as_pdf_outlined,
+                      color: maroonColor,
+                      size: 24,
+                    ),
+                    title: Text(
+                      pdf.title ?? "Untitled PDF",
+                      style: GoogleFonts.roboto(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        color: textColor,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'PDF Document',
+                      style: GoogleFonts.roboto(
+                        fontSize: 12,
+                        color: textSecondaryColor,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PdfPreviewScreen(
+                            pdfUrl: pdf.pdfUrl!,
+                            title: pdf.title ?? "PDF Preview",
+                            greenColor: greenColor,
+                            maroonColor: maroonColor,
+                          ),
+                        ),
+                      );
+                    },
+                    trailing: isAdmin
+                        ? IconButton(
+                      icon: Icon(Icons.delete_outline, size: 18, color: maroonColor),
+                      onPressed: () async {
+                        await Provider.of<CourseProvider>(context, listen: false)
+                            .deletePdfFromSection(courseId, section.sectionTitle!, pdfIndex);
+                        _showSuccessSnackbar('PDF deleted successfully!');
+                        await _initializeCourse();
+                      },
+                      tooltip: 'Delete PDF',
+                    )
+                        : null,
+                  );
+                },
               ),
-              subtitle: Text(
-                'PDF Document',
-                style: GoogleFonts.roboto(
-                  fontSize: 12,
-                  color: textSecondaryColor,
-                ),
-              ),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => PdfPreviewScreen(
-                      pdfUrl: pdf.pdfUrl!,
-                      title: pdf.title ?? "PDF Preview",
-                      greenColor: greenColor,
-                      maroonColor: maroonColor,
+
+            // Add resource button for admin
+            if (isAdmin)
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: OutlinedButton.icon(
+                  onPressed: () => _showAddResourceDialog(widget.courseId, section.sectionTitle ?? ''),
+                  icon: Icon(Icons.add, size: 18),
+                  label: Text('ADD RESOURCE'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: yellowColor,
+                    side: BorderSide(color: yellowColor),
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    textStyle: GoogleFonts.roboto(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 1,
                     ),
                   ),
-                );
-              },
-              trailing: isAdmin
-                  ? IconButton(
-                icon: Icon(Icons.delete_outline, size: 18, color: maroonColor),
-                onPressed: () async {
-                  await Provider.of<CourseProvider>(context, listen: false)
-                      .deletePdfFromSection(courseId, section.sectionTitle!, pdfIndex);
-                  _showSuccessSnackbar('PDF deleted successfully!');
-                  await _initializeCourse();
-                },
-                tooltip: 'Delete PDF',
-              )
-                  : null,
-            );
-          },
-        ),
-
-      // Add resource button for admin
-      if (isAdmin)
-        Padding(
-          padding: EdgeInsets.all(16),
-          child: OutlinedButton.icon(
-            onPressed: () => _showAddResourceDialog(widget.courseId, section.sectionTitle ?? ''),
-            icon: Icon(Icons.add, size: 18),
-            label: Text('ADD RESOURCE'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: yellowColor,
-              side: BorderSide(color: yellowColor),
-              padding: EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
+                ),
               ),
-              textStyle: GoogleFonts.roboto(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-        ),
 
-      // Empty state for no content
-      if (section.videos.isEmpty && section.pdfs.isEmpty)
-        Padding(
-          padding: EdgeInsets.all(16),
-          child: Text(
-            'No content available in this section',
-            style: GoogleFonts.roboto(
-              fontSize: 14,
-              fontStyle: FontStyle.italic,
-              color: textSecondaryColor,
-            ),
-            textAlign: TextAlign.center,
-          ),
+            // Empty state for no content
+            if (section.videos.isEmpty && section.pdfs.isEmpty)
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'No content available in this section',
+                  style: GoogleFonts.roboto(
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                    color: textSecondaryColor,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+          ],
         ),
-    ],
-    ),
-        ),
+      ),
     );
   }
 
@@ -1217,7 +1265,100 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
       },
     );
   }
+// Replace both these methods in your code:
 
+  void _initializeYoutubePlayer(String? videoUrl) {
+    if (videoUrl == null || videoUrl.isEmpty) return;
+
+    String? videoId = YoutubePlayer.convertUrlToId(videoUrl);
+    if (videoId == null) {
+      print("Invalid video URL");
+      return;
+    }
+
+    setState(() {
+      // Always create a new controller when initializing
+      if (_youtubeController != null) {
+        _youtubeController!.dispose();
+      }
+
+      _youtubeController = YoutubePlayerController(
+        initialVideoId: videoId,
+        flags: const YoutubePlayerFlags(
+          autoPlay: true,  // Set to true to auto-play when initialized
+          mute: false,
+          enableCaption: true,
+          isLive: false,
+        ),
+      );
+    });
+  }
+
+  void _playVideo(String videoUrl, int sectionIndex, int videoIndex) {
+    // Check access control - allow first video for everyone
+    bool isFirstVideo = sectionIndex == 0 && videoIndex == 0;
+    bool canAccessVideo = isFirstVideo || isEnrolled || isAdmin;
+
+    if (!canAccessVideo) {
+      _showEnrollPrompt();
+      return;
+    }
+
+    // Get video ID from URL
+    String? videoId = YoutubePlayer.convertUrlToId(videoUrl);
+    if (videoId == null) {
+      _showErrorSnackbar('Invalid video URL');
+      return;
+    }
+
+    // Initialize or update the controller
+    setState(() {
+      if (_youtubeController == null) {
+        // Initialize a new controller if none exists
+        _youtubeController = YoutubePlayerController(
+          initialVideoId: videoId,
+          flags: const YoutubePlayerFlags(
+            autoPlay: true,
+            mute: false,
+            enableCaption: true,
+            isLive: false,
+          ),
+        );
+      } else {
+        try {
+          // Only try to load if controller is ready
+          if (_youtubeController!.value.isReady) {
+            _youtubeController!.load(videoId);
+          } else {
+            // If not ready, reinitialize the controller
+            _youtubeController!.dispose();
+            _youtubeController = YoutubePlayerController(
+              initialVideoId: videoId,
+              flags: const YoutubePlayerFlags(
+                autoPlay: true,
+                mute: false,
+                enableCaption: true,
+                isLive: false,
+              ),
+            );
+          }
+        } catch (e) {
+          // Handle any errors by reinitializing
+          print("Error playing video: $e");
+          _youtubeController!.dispose();
+          _youtubeController = YoutubePlayerController(
+            initialVideoId: videoId,
+            flags: const YoutubePlayerFlags(
+              autoPlay: true,
+              mute: false,
+              enableCaption: true,
+              isLive: false,
+            ),
+          );
+        }
+      }
+    });
+  }
   Widget _buildFeedbackForm(CustomUser user) {
     return Container(
       padding: EdgeInsets.all(20),
@@ -1596,50 +1737,16 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
   }
 
   // Utility methods for the course screen
-  void _initializeYoutubePlayer(String? videoUrl) {
-    if (videoUrl == null || videoUrl.isEmpty) return;
-    String? videoId = YoutubePlayer.convertUrlToId(videoUrl);
-    if (videoId != null && _youtubeController == null) {
-      _youtubeController = YoutubePlayerController(
-        initialVideoId: videoId,
-        flags: const YoutubePlayerFlags(
-          autoPlay: false,
-          mute: false,
-          enableCaption: true,
-          isLive: false,
-        ),
-      );
-    } else if (videoId != null && _youtubeController != null) {
-      _youtubeController!.load(videoId);
-    } else {
-      print("Invalid video URL");
-    }
-  }
 
-  void _playVideo(String videoUrl, int sectionIndex, int videoIndex) {
-    String? videoId = YoutubePlayer.convertUrlToId(videoUrl);
-    if (videoId != null) {
-      setState(() {
-        if (_youtubeController != null) {
-          _youtubeController!.load(videoId);
-        } else {
-          _youtubeController = YoutubePlayerController(
-            initialVideoId: videoId,
-            flags: const YoutubePlayerFlags(
-              autoPlay: true,
-              mute: false,
-              enableCaption: true,
-              isLive: false,
-            ),
-          );
-        }
-      });
-    } else {
-      _showErrorSnackbar('Invalid video URL');
-    }
-  }
+
 
   Future<void> _enrollUser() async {
+    // Check if course is free - only allow self-enrollment for free courses
+    if (_course!.status != 'free') {
+      _showErrorSnackbar('This is a premium course. Please contact the admin to enroll.');
+      return;
+    }
+
     final courseProvider = Provider.of<CourseProvider>(context, listen: false);
     final authProvider = Provider.of<AuthService>(context, listen: false);
     final CustomUser? currentUser = await authProvider.getCurrentUser();
@@ -1724,11 +1831,45 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
               color: greenColor,
             ),
           ),
-          content: Text(
-            'You need to enroll in this course to access this content.',
-            style: GoogleFonts.roboto(
-              color: textColor,
-            ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'You need to enroll in this course to access this content.',
+                style: GoogleFonts.roboto(
+                  color: textColor,
+                ),
+              ),
+              SizedBox(height: 16),
+              if (_course!.status != 'free')
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: Colors.orange,
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'This is a premium course. Please contact admin to enroll.',
+                          style: GoogleFonts.roboto(
+                            fontSize: 14,
+                            color: textColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
           actions: [
             TextButton(
@@ -1742,27 +1883,28 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
                 ),
               ),
             ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _confirmEnroll();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: maroonColor,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
+            if (_course!.status == 'free')
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _confirmEnroll();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: maroonColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                child: Text(
+                  'ENROLL NOW',
+                  style: GoogleFonts.roboto(
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1,
+                  ),
                 ),
               ),
-              child: Text(
-                'ENROLL NOW',
-                style: GoogleFonts.roboto(
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 1,
-                ),
-              ),
-            ),
           ],
         );
       },
@@ -1770,6 +1912,12 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
   }
 
   void _confirmEnroll() {
+    // Check if course is free - only allow self-enrollment for free courses
+    if (_course!.status != 'free') {
+      _showErrorSnackbar('This is a premium course. Please contact the admin to enroll.');
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) {
@@ -1923,173 +2071,251 @@ class _CourseScreenState extends State<CourseScreen> with TickerProviderStateMix
     bool _isUpdating = false;
 
     showDialog(
-        context: context,
-        builder: (context) {
-      return StatefulBuilder(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
           builder: (context, setState) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
+            title: Text(
+              'Edit Your Review',
+              style: GoogleFonts.roboto(
+                fontWeight: FontWeight.w600,
+                color: greenColor,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Update your rating:',
+                  style: GoogleFonts.roboto(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: textSecondaryColor,
+                  ),
+                ),
+                SizedBox(height: 8),
+                RatingBar.builder(
+                  initialRating: _localRating,
+                  minRating: 1,
+                  direction: Axis.horizontal,
+                  allowHalfRating: true,
+                  itemCount: 5,
+                  itemSize: 24,
+                  itemBuilder: (context, _) => Icon(
+                    Icons.star,
+                    color: accentColor,
+                  ),
+                  onRatingUpdate: (rating) {
+                    _localRating = rating;
+                  },
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Update your feedback:',
+                  style: GoogleFonts.roboto(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: textSecondaryColor,
+                  ),
+                ),
+                SizedBox(height: 8),
+                TextField(
+                  controller: _feedbackController,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: BorderSide(color: yellowColor, width: 2),
+                    ),
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                  style: GoogleFonts.roboto(
+                    fontSize: 14,
+                    color: textColor,
+                  ),
+                  maxLines: 3,
+                  maxLength: 150,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'CANCEL',
+                  style: GoogleFonts.roboto(
+                    color: textSecondaryColor,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: _isUpdating ? null : () async {
+                  if (_feedbackController.text.trim().isEmpty) {
+                    _showErrorSnackbar('Please enter your feedback');
+                    return;
+                  }
+
+                  setState(() {
+                    _isUpdating = true;
+                  });
+
+                  try {
+                    await Provider.of<CourseProvider>(context, listen: false)
+                        .updateFeedback(
+                        _course!.id!,
+                        feedback.userId.toString(),
+                        _feedbackController.text.trim(),
+                        _localRating
+                    );
+
+                    Navigator.pop(context);
+                    _showSuccessSnackbar('Feedback updated successfully!');
+                    await _initializeCourse();
+                  } catch (e) {
+                    _showErrorSnackbar('Failed to update feedback: $e');
+                  } finally {
+                    setState(() {
+                      _isUpdating = false;
+                    });
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: maroonColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  disabledBackgroundColor: Colors.grey.shade400,
+                ),
+                child: _isUpdating
+                    ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+                    : Text(
+                  'SAVE',
+                  style: GoogleFonts.roboto(
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _deleteFeedback(String courseId, FeedBack feedback) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
           shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-    ),
-    title: Text(
-    'Edit Your Review',
-    style: GoogleFonts.roboto(
-    fontWeight: FontWeight.w600,
-    color: greenColor,
-    ),
-    ),
-    content: Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-    Text(
-    'Update your rating:',
-    style: GoogleFonts.roboto(
-    fontSize: 14,
-    fontWeight: FontWeight.w500,
-    color: textSecondaryColor,
-    ),
-    ),
-    SizedBox(height: 8),
-    RatingBar.builder(
-    initialRating: _localRating,
-    minRating: 1,
-    direction: Axis.horizontal,
-    allowHalfRating: true,
-    itemCount: 5,
-    itemSize: 24,
-    itemBuilder: (context, _) => Icon(
-    Icons.star,
-    color: accentColor,
-    ),
-    onRatingUpdate: (rating) {
-    _localRating = rating;
-    },
-    ),
-    SizedBox(height: 16),
-    Text(
-    'Update your feedback:',
-    style: GoogleFonts.roboto(
-    fontSize: 14,
-    fontWeight: FontWeight.w500,
-    color: textSecondaryColor,
-    ),
-    ),
-    SizedBox(height: 8),
-    TextField(
-    controller: _feedbackController,
-    decoration: InputDecoration(
-    border: OutlineInputBorder(
-    borderRadius: BorderRadius.circular(4),
-    borderSide: BorderSide(color: Colors.grey.shade300),
-    ),
-    focusedBorder: OutlineInputBorder(
-    borderRadius: BorderRadius.circular(4),
-    borderSide: BorderSide(color: yellowColor, width: 2),
-    ),
-    contentPadding: EdgeInsets.all(12),
-    ),
-    style: GoogleFonts.roboto(
-    fontSize: 14,
-    color: textColor,
-    ),
-    maxLines: 3,
-    maxLength: 150,
-    ),
-    ],
-    ),
-    actions: [
-    TextButton(
-    onPressed: () => Navigator.pop(context),
-    child: Text(
-    'CANCEL',
-    style: GoogleFonts.roboto(
-    color: textSecondaryColor,
-    fontWeight: FontWeight.w500,
-    letterSpacing: 1,
-    ),
-    ),
-    ),
-    ElevatedButton(
-    onPressed: _isUpdating ? null : () async {
-    if (_feedbackController.text.trim().isEmpty) {
-    _showErrorSnackbar('Please enter your feedback');
-    return;
-    }
-
-    setState(() {
-    _isUpdating = true;
-    });
-
-    try {
-    await Provider.of<CourseProvider>(context, listen: false)
-        .updateFeedback(
-    _course!.id!,
-    feedback.userId.toString(),
-    _feedbackController.text.trim(),
-    _localRating
+            borderRadius: BorderRadius.circular(4),
+          ),
+          title: Text(
+            'Delete Review',
+            style: GoogleFonts.roboto(
+              fontWeight: FontWeight.w600,
+              color: maroonColor,
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to delete this review?',
+            style: GoogleFonts.roboto(
+              color: textColor,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'CANCEL',
+                style: GoogleFonts.roboto(
+                  color: textSecondaryColor,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: maroonColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              child: Text(
+                'DELETE',
+                style: GoogleFonts.roboto(
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
 
-    Navigator.pop(context);
-    _showSuccessSnackbar('Feedback updated successfully!');
-    await _initializeCourse();
-    } catch (e) {
-    _showErrorSnackbar('Failed to update feedback: $e');
-    } finally {
-    setState(() {
-    _isUpdating = false;
-    });
-    }
-    },
-    style: ElevatedButton.styleFrom(
-    backgroundColor: maroonColor,
-    foregroundColor: Colors.white,
-    elevation: 0,
-    shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(4),
-    ),
-    disabledBackgroundColor: Colors.grey.shade400,
-    ),
-    child: _isUpdating
-    ? SizedBox(
-    width: 16,
-    height: 16,
-    child: CircularProgressIndicator(
-    color: Colors.white,
-    strokeWidth: 2,
-    ),
-    )
-        : Text(
-    'SAVE',
-    style: GoogleFonts.roboto(
-    fontWeight: FontWeight.w500,
-    letterSpacing: 1,
-    ),
-    ),
-    ),
-    ],
-    ),
-    );
-  },
-  );
-}
+    if (shouldDelete == true) {
+      setState(() {
+        _isSubmitting = true;
+      });
 
-void _deleteFeedback(String courseId, FeedBack feedback) async {
-  final shouldDelete = await showDialog<bool>(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
+      try {
+        await Provider.of<CourseProvider>(context, listen: false)
+            .deleteFeedback(_course!.id!, feedback.userId.toString());
+        setState(() {
+          _isSubmitting = false;
+        });
+        await _initializeCourse();
+        _showSuccessSnackbar('Review deleted successfully');
+      } catch (e) {
+        setState(() {
+          _isSubmitting = false;
+        });
+        _showErrorSnackbar('Failed to delete review. Please try again.');
+      }
+    }
+  }
+
+// Admin related methods
+  Future<bool> _showDeleteConfirmation(BuildContext context) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(4),
         ),
         title: Text(
-          'Delete Review',
+          'Delete Course',
           style: GoogleFonts.roboto(
             fontWeight: FontWeight.w600,
             color: maroonColor,
           ),
         ),
         content: Text(
-          'Are you sure you want to delete this review?',
+          'Are you sure you want to delete this course? This action cannot be undone.',
           style: GoogleFonts.roboto(
             color: textColor,
           ),
@@ -2125,1018 +2351,345 @@ void _deleteFeedback(String courseId, FeedBack feedback) async {
             ),
           ),
         ],
-      );
-    },
-  );
-
-  if (shouldDelete == true) {
-    setState(() {
-      _isSubmitting = true;
-    });
-
-    try {
-      await Provider.of<CourseProvider>(context, listen: false)
-          .deleteFeedback(_course!.id!, feedback.userId.toString());
-      setState(() {
-        _isSubmitting = false;
-      });
-      await _initializeCourse();
-      _showSuccessSnackbar('Review deleted successfully');
-    } catch (e) {
-      setState(() {
-        _isSubmitting = false;
-      });
-      _showErrorSnackbar('Failed to delete review. Please try again.');
-    }
+      ),
+    ) ?? false;
   }
-}
 
-// Admin related methods
-Future<bool> _showDeleteConfirmation(BuildContext context) async {
-  return await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(4),
-      ),
-      title: Text(
-        'Delete Course',
-        style: GoogleFonts.roboto(
-          fontWeight: FontWeight.w600,
-          color: maroonColor,
-        ),
-      ),
-      content: Text(
-        'Are you sure you want to delete this course? This action cannot be undone.',
-        style: GoogleFonts.roboto(
-          color: textColor,
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: Text(
-            'CANCEL',
-            style: GoogleFonts.roboto(
-              color: textSecondaryColor,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 1,
-            ),
-          ),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: maroonColor,
-            foregroundColor: Colors.white,
-            elevation: 0,
+  void _showEditCourseDialog(BuildContext context, Course course) {
+    final TextEditingController titleController = TextEditingController(text: course.courseTitle);
+    final TextEditingController descriptionController = TextEditingController(text: course.description);
+    final TextEditingController priceController = TextEditingController(text: course.price.toString());
+    final TextEditingController subjectController = TextEditingController(text: course.subject);
+    final TextEditingController mediumController = TextEditingController(text: course.medium);
+    String statusValue = course.status ?? 'premium';
+    bool _isUpdating = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(4),
             ),
-          ),
-          child: Text(
-            'DELETE',
-            style: GoogleFonts.roboto(
-              fontWeight: FontWeight.w500,
-              letterSpacing: 1,
-            ),
-          ),
-        ),
-      ],
-    ),
-  ) ?? false;
-}
-
-void _showEditCourseDialog(BuildContext context, Course course) {
-  final TextEditingController titleController = TextEditingController(text: course.courseTitle);
-  final TextEditingController descriptionController = TextEditingController(text: course.description);
-  final TextEditingController priceController = TextEditingController(text: course.price.toString());
-  final TextEditingController subjectController = TextEditingController(text: course.subject);
-  final TextEditingController mediumController = TextEditingController(text: course.medium);
-  bool _isUpdating = false;
-
-  showDialog(
-    context: context,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4),
-          ),
-          title: Text(
-            'Edit Course',
-            style: GoogleFonts.roboto(
-              fontWeight: FontWeight.w600,
-              color: greenColor,
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Course Title',
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: textSecondaryColor,
-                  ),
-                ),
-                SizedBox(height: 8),
-                TextField(
-                  controller: titleController,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: yellowColor, width: 2),
-                    ),
-                    contentPadding: EdgeInsets.all(12),
-                  ),
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    color: textColor,
-                  ),
-                ),
-                SizedBox(height: 16),
-
-                Text(
-                  'Description',
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: textSecondaryColor,
-                  ),
-                ),
-                SizedBox(height: 8),
-                TextField(
-                  controller: descriptionController,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: yellowColor, width: 2),
-                    ),
-                    contentPadding: EdgeInsets.all(12),
-                  ),
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    color: textColor,
-                  ),
-                  maxLines: 3,
-                ),
-                SizedBox(height: 16),
-
-                Text(
-                  'Price (Rs.)',
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: textSecondaryColor,
-                  ),
-                ),
-                SizedBox(height: 8),
-                TextField(
-                  controller: priceController,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: yellowColor, width: 2),
-                    ),
-                    contentPadding: EdgeInsets.all(12),
-                  ),
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    color: textColor,
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                SizedBox(height: 16),
-
-                Text(
-                  'Subject',
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: textSecondaryColor,
-                  ),
-                ),
-                SizedBox(height: 8),
-                TextField(
-                  controller: subjectController,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: yellowColor, width: 2),
-                    ),
-                    contentPadding: EdgeInsets.all(12),
-                  ),
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    color: textColor,
-                  ),
-                ),
-                SizedBox(height: 16),
-
-                Text(
-                  'Medium',
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: textSecondaryColor,
-                  ),
-                ),
-                SizedBox(height: 8),
-                TextField(
-                  controller: mediumController,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: yellowColor, width: 2),
-                    ),
-                    contentPadding: EdgeInsets.all(12),
-                  ),
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    color: textColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'CANCEL',
-                style: GoogleFonts.roboto(
-                  color: textSecondaryColor,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 1,
-                ),
+            title: Text(
+              'Edit Course',
+              style: GoogleFonts.roboto(
+                fontWeight: FontWeight.w600,
+                color: greenColor,
               ),
             ),
-            ElevatedButton(
-              onPressed: _isUpdating ? null : () async {
-                if (titleController.text.isNotEmpty &&
-                    descriptionController.text.isNotEmpty &&
-                    priceController.text.isNotEmpty) {
-                  setState(() {
-                    _isUpdating = true;
-                  });
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Course Title',
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textSecondaryColor,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  TextField(
+                    controller: titleController,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: yellowColor, width: 2),
+                      ),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      color: textColor,
+                    ),
+                  ),
+                  SizedBox(height: 16),
 
-                  try {
-                    final updatedCourse = Course(
-                      id: course.id,
-                      courseTitle: titleController.text,
-                      description: descriptionController.text,
-                      price: double.tryParse(priceController.text) ?? course.price,
-                      subject: subjectController.text,
-                      duration: course.duration,
-                      instructor: course.instructor,
-                      averageRating: course.averageRating,
-                      enrolledUserIds: course.enrolledUserIds,
-                      sections: course.sections,
-                      feedbacks: course.feedbacks,
-                      medium: mediumController.text,
-                    );
+                  Text(
+                    'Description',
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textSecondaryColor,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: yellowColor, width: 2),
+                      ),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      color: textColor,
+                    ),
+                    maxLines: 3,
+                  ),
+                  SizedBox(height: 16),
 
-                    await Provider.of<CourseProvider>(context, listen: false)
-                        .updateCourse(updatedCourse);
+                  Text(
+                    'Price (Rs.)',
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textSecondaryColor,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  TextField(
+                    controller: priceController,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: yellowColor, width: 2),
+                      ),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      color: textColor,
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  SizedBox(height: 16),
 
-                    Navigator.pop(context);
-                    _showSuccessSnackbar('Course updated successfully!');
-                    await _initializeCourse();
-                  } catch (e) {
-                    _showErrorSnackbar('Failed to update course: $e');
-                  } finally {
+                  Text(
+                    'Subject',
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textSecondaryColor,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  TextField(
+                    controller: subjectController,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: yellowColor, width: 2),
+                      ),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      color: textColor,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+
+                  Text(
+                    'Medium',
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textSecondaryColor,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  TextField(
+                    controller: mediumController,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: yellowColor, width: 2),
+                      ),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      color: textColor,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+
+                  Text(
+                    'Course Type',
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textSecondaryColor,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: RadioListTile<String>(
+                          title: Text(
+                            'Free',
+                            style: GoogleFonts.roboto(
+                              fontSize: 14,
+                              color: textColor,
+                            ),
+                          ),
+                          value: "free",
+                          groupValue: statusValue,
+                          activeColor: yellowColor,
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          onChanged: (value) {
+                            setState(() {
+                              statusValue = value!;
+                            });
+                          },
+                        ),
+                      ),
+                      Expanded(
+                        child: RadioListTile<String>(
+                          title: Text(
+                            'Premium',
+                            style: GoogleFonts.roboto(
+                              fontSize: 14,
+                              color: textColor,
+                            ),
+                          ),
+                          value: "premium",
+                          groupValue: statusValue,
+                          activeColor: yellowColor,
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          onChanged: (value) {
+                            setState(() {
+                              statusValue = value!;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'CANCEL',
+                  style: GoogleFonts.roboto(
+                    color: textSecondaryColor,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: _isUpdating ? null : () async {
+                  if (titleController.text.isNotEmpty &&
+                      descriptionController.text.isNotEmpty &&
+                      priceController.text.isNotEmpty) {
                     setState(() {
-                      _isUpdating = false;
+                      _isUpdating = true;
                     });
+
+                    try {
+                      final updatedCourse = Course(
+                        id: course.id,
+                        courseTitle: titleController.text,
+                        description: descriptionController.text,
+                        price: double.tryParse(priceController.text) ?? course.price,
+                        subject: subjectController.text,
+                        duration: course.duration,
+                        instructor: course.instructor,
+                        averageRating: course.averageRating,
+                        enrolledUserIds: course.enrolledUserIds,
+                        sections: course.sections,
+                        feedbacks: course.feedbacks,
+                        medium: mediumController.text,
+                        status: statusValue,
+                      );
+
+                      await Provider.of<CourseProvider>(context, listen: false)
+                          .updateCourse(updatedCourse);
+
+                      Navigator.pop(context);
+                      _showSuccessSnackbar('Course updated successfully!');
+                      await _initializeCourse();
+                    } catch (e) {
+                      _showErrorSnackbar('Failed to update course: $e');
+                    } finally {
+                      setState(() {
+                        _isUpdating = false;
+                      });
+                    }
+                  } else {
+                    _showErrorSnackbar('Please fill out all required fields');
                   }
-                } else {
-                  _showErrorSnackbar('Please fill out all required fields');
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: maroonColor,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: maroonColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  disabledBackgroundColor: Colors.grey.shade400,
                 ),
-                disabledBackgroundColor: Colors.grey.shade400,
-              ),
-              child: _isUpdating
-                  ? SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
-                  : Text(
-                'SAVE',
-                style: GoogleFonts.roboto(
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 1,
+                child: _isUpdating
+                    ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+                    : Text(
+                  'SAVE',
+                  style: GoogleFonts.roboto(
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
-
-void _showAddSectionDialog(BuildContext context) {
-  final TextEditingController _sectionTitleController = TextEditingController();
-  bool _isAdding = false;
-
-  showDialog(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-        ),
-        title: Text(
-          'Add Section',
-          style: GoogleFonts.roboto(
-            fontWeight: FontWeight.w600,
-            color: greenColor,
+            ],
           ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Section Title',
-              style: GoogleFonts.roboto(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: textSecondaryColor,
-              ),
-            ),
-            SizedBox(height: 8),
-            TextField(
-              controller: _sectionTitleController,
-              decoration: InputDecoration(
-                hintText: 'Enter section title',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(4),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(4),
-                  borderSide: BorderSide(color: yellowColor, width: 2),
-                ),
-                contentPadding: EdgeInsets.all(12),
-              ),
-              style: GoogleFonts.roboto(
-                fontSize: 14,
-                color: textColor,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'CANCEL',
-              style: GoogleFonts.roboto(
-                color: textSecondaryColor,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: _isAdding ? null : () async {
-              if (_sectionTitleController.text.isNotEmpty) {
-                setState(() {
-                  _isAdding = true;
-                });
+        );
+      },
+    );
+  }
 
-                try {
-                  final courseProvider = Provider.of<CourseProvider>(context, listen: false);
-                  await courseProvider.addSection(widget.courseId, _sectionTitleController.text);
+  void _showAddSectionDialog(BuildContext context) {
+    final TextEditingController _sectionTitleController = TextEditingController();
+    bool _isAdding = false;
 
-                  Navigator.pop(context);
-                  _showSuccessSnackbar('Section added successfully!');
-                  await _initializeCourse();
-                } catch (e) {
-                  _showErrorSnackbar('Failed to add section: $e');
-                } finally {
-                  setState(() {
-                    _isAdding = false;
-                  });
-                }
-              } else {
-                _showErrorSnackbar('Please enter a section title');
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: maroonColor,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
-              disabledBackgroundColor: Colors.grey.shade400,
-            ),
-            child: _isAdding
-                ? SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2,
-              ),
-            )
-                : Text(
-              'ADD',
-              style: GoogleFonts.roboto(
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-void _showEditSectionDialog(Section section, int sectionIndex) {
-  final TextEditingController _sectionTitleController = TextEditingController(text: section.sectionTitle);
-  bool _isUpdating = false;
-
-  showDialog(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-        ),
-        title: Text(
-          'Edit Section',
-          style: GoogleFonts.roboto(
-            fontWeight: FontWeight.w600,
-            color: greenColor,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Section Title',
-              style: GoogleFonts.roboto(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: textSecondaryColor,
-              ),
-            ),
-            SizedBox(height: 8),
-            TextField(
-              controller: _sectionTitleController,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(4),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(4),
-                  borderSide: BorderSide(color: yellowColor, width: 2),
-                ),
-                contentPadding: EdgeInsets.all(12),
-              ),
-              style: GoogleFonts.roboto(
-                fontSize: 14,
-                color: textColor,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'CANCEL',
-              style: GoogleFonts.roboto(
-                color: textSecondaryColor,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: _isUpdating ? null : () async {
-              if (_sectionTitleController.text.isNotEmpty) {
-                setState(() {
-                  _isUpdating = true;
-                });
-
-                try {
-                  final courseProvider = Provider.of<CourseProvider>(context, listen: false);
-                  await courseProvider.editSection(
-                      widget.courseId,
-                      section.sectionTitle ?? '',
-                      _sectionTitleController.text
-                  );
-
-                  Navigator.pop(context);
-                  _showSuccessSnackbar('Section updated successfully!');
-                  await _initializeCourse();
-                } catch (e) {
-                  _showErrorSnackbar('Failed to update section: $e');
-                } finally {
-                  setState(() {
-                    _isUpdating = false;
-                  });
-                }
-              } else {
-                _showErrorSnackbar('Please enter a section title');
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: maroonColor,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
-              disabledBackgroundColor: Colors.grey.shade400,
-            ),
-            child: _isUpdating
-                ? SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2,
-              ),
-            )
-                : Text(
-              'SAVE',
-              style: GoogleFonts.roboto(
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-void _confirmDeleteSection(int sectionIndex, Section section) {
-  showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-        ),
-        title: Text(
-          'Delete Section',
-          style: GoogleFonts.roboto(
-            fontWeight: FontWeight.w600,
-            color: maroonColor,
-          ),
-        ),
-        content: Text(
-          'Are you sure you want to delete the "${section.sectionTitle}" section? This will remove all videos and resources in this section.',
-          style: GoogleFonts.roboto(
-            color: textColor,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'CANCEL',
-              style: GoogleFonts.roboto(
-                color: textSecondaryColor,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: isActionLoading
-                ? null
-                : () async {
-              setState(() => isActionLoading = true);
-
-              try {
-                await Provider.of<CourseProvider>(context, listen: false)
-                    .deleteSection(widget.courseId, section.sectionTitle ?? '');
-
-                Navigator.of(context).pop();
-                _showSuccessSnackbar('Section deleted successfully!');
-                await _initializeCourse();
-              } catch (e) {
-                _showErrorSnackbar('Failed to delete section: $e');
-              } finally {
-                setState(() => isActionLoading = false);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: maroonColor,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
-              disabledBackgroundColor: Colors.grey.shade400,
-            ),
-            child: isActionLoading
-                ? SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2,
-              ),
-            )
-                : Text(
-              'DELETE',
-              style: GoogleFonts.roboto(
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-        ],
-      );
-    },
-  );
-}
-
-void _showAddResourceDialog(String courseId, String sectionTitle) {
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _urlController = TextEditingController();
-  String resourceType = "Video"; // Default type is Video
-  PlatformFile? pickedPdf; // Holds the picked PDF file if any
-  bool _isAdding = false;
-
-  showDialog(
+    showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-      builder: (context, setState) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(4),
-      ),
-      title: Text(
-        'Add Resource',
-        style: GoogleFonts.roboto(
-          fontWeight: FontWeight.w600,
-          color: greenColor,
-        ),
-      ),
-      content: SingleChildScrollView(
-      child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-      // Resource type selector
-      Text(
-      'Resource Type',
-      style: GoogleFonts.roboto(
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-        color: textSecondaryColor,
-      ),
-    ),
-  SizedBox(height: 8),
-  Row(
-  children: [
-  Expanded(
-  child: RadioListTile<String>(
-  title: Text(
-  'Video',
-  style: GoogleFonts.roboto(
-  fontSize: 14,
-  color: textColor,
-  ),
-  ),
-  value: "Video",
-  groupValue: resourceType,
-  activeColor: yellowColor,
-  contentPadding: EdgeInsets.zero,
-  dense: true,
-  onChanged: (value) {
-  setState(() {
-  resourceType = value!;
-  pickedPdf = null;
-  _urlController.clear();
-  });
-  },
-  ),
-  ),
-  Expanded(
-  child: RadioListTile<String>(
-  title: Text(
-  'PDF',
-  style: GoogleFonts.roboto(
-  fontSize: 14,
-  color: textColor,
-  ),
-  ),
-  value: "PDF",
-  groupValue: resourceType,
-  activeColor: yellowColor,
-  contentPadding: EdgeInsets.zero,
-  dense: true,
-  onChanged: (value) {
-  setState(() {
-  resourceType = value!;
-  _urlController.clear();
-  });
-  },
-  ),
-  ),
-  ],
-  ),
-  SizedBox(height: 16),
-
-  // Resource title field
-  Text(
-  resourceType == "Video" ? 'Video Title' : 'PDF Title',
-    style: GoogleFonts.roboto(
-      fontSize: 14,
-      fontWeight: FontWeight.w500,
-      color: textSecondaryColor,
-    ),
-  ),
-        SizedBox(height: 8),
-        TextField(
-          controller: _titleController,
-          decoration: InputDecoration(
-            hintText: 'Enter title',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(4),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(4),
-              borderSide: BorderSide(color: yellowColor, width: 2),
-            ),
-            contentPadding: EdgeInsets.all(12),
-          ),
-          style: GoogleFonts.roboto(
-            fontSize: 14,
-            color: textColor,
-          ),
-        ),
-        SizedBox(height: 16),
-
-        // URL field for Video or file picker for PDF
-        if (resourceType == "Video") ...[
-          Text(
-            'Video URL',
-            style: GoogleFonts.roboto(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: textSecondaryColor,
-            ),
-          ),
-          SizedBox(height: 8),
-          TextField(
-            controller: _urlController,
-            decoration: InputDecoration(
-              hintText: 'Enter YouTube URL',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: BorderSide(color: yellowColor, width: 2),
-              ),
-              contentPadding: EdgeInsets.all(12),
-            ),
-            style: GoogleFonts.roboto(
-              fontSize: 14,
-              color: textColor,
-            ),
-          ),
-        ] else ...[
-          Text(
-            'PDF File',
-            style: GoogleFonts.roboto(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: textSecondaryColor,
-            ),
-          ),
-          SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                FilePickerResult? result =
-                await FilePicker.platform.pickFiles(
-                  type: FileType.custom,
-                  allowedExtensions: ['pdf'],
-                );
-                if (result != null && result.files.isNotEmpty) {
-                  setState(() {
-                    pickedPdf = result.files.first;
-                    _urlController.text = pickedPdf!.name;
-                  });
-                }
-              },
-              icon: Icon(Icons.attach_file_outlined, size: 18),
-              label: Text('SELECT PDF FILE'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: yellowColor,
-                side: BorderSide(color: yellowColor),
-                padding: EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                textStyle: GoogleFonts.roboto(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 1,
-                ),
-              ),
-            ),
-          ),
-          if (pickedPdf != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Text(
-                'Selected: ${pickedPdf!.name}',
-                style: GoogleFonts.roboto(
-                  fontSize: 14,
-                  fontStyle: FontStyle.italic,
-                  color: textSecondaryColor,
-                ),
-              ),
-            ),
-        ],
-      ],
-      ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(
-            'CANCEL',
-            style: GoogleFonts.roboto(
-              color: textSecondaryColor,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 1,
-            ),
-          ),
-        ),
-        ElevatedButton(
-          onPressed: _isAdding ? null : () async {
-            String title = _titleController.text.trim();
-            if (title.isEmpty) {
-              _showErrorSnackbar('Please enter a resource title');
-              return;
-            }
-
-            setState(() {
-              _isAdding = true;
-            });
-
-            try {
-              if (resourceType == "Video") {
-                String url = _urlController.text.trim();
-                if (url.isEmpty) {
-                  _showErrorSnackbar('Please enter a video URL');
-                  setState(() {
-                    _isAdding = false;
-                  });
-                  return;
-                }
-
-                String? videoId = YoutubePlayer.convertUrlToId(url);
-                if (videoId == null) {
-                  _showErrorSnackbar('Please enter a valid YouTube URL');
-                  setState(() {
-                    _isAdding = false;
-                  });
-                  return;
-                }
-
-                await Provider.of<CourseProvider>(context, listen: false)
-                    .addVideoToSection(courseId, sectionTitle, Video(title: title, videoUrl: url));
-              } else {
-                if (pickedPdf == null) {
-                  _showErrorSnackbar('Please pick a PDF file');
-                  setState(() {
-                    _isAdding = false;
-                  });
-                  return;
-                }
-
-                File pdfFile = File(pickedPdf!.path!);
-                String? uploadedPdfUrl = await Provider.of<CourseProvider>(context, listen: false)
-                    .uploadPdf(pdfFile);
-
-                if (uploadedPdfUrl != null) {
-                  await Provider.of<CourseProvider>(context, listen: false)
-                      .addPdfToSection(courseId, sectionTitle, title, uploadedPdfUrl);
-                } else {
-                  _showErrorSnackbar('Failed to upload PDF');
-                  setState(() {
-                    _isAdding = false;
-                  });
-                  return;
-                }
-              }
-
-              Navigator.pop(context);
-              _showSuccessSnackbar('Resource added successfully!');
-              await _initializeCourse();
-            } catch (e) {
-              _showErrorSnackbar('Failed to add resource: $e');
-            } finally {
-              setState(() {
-                _isAdding = false;
-              });
-            }
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: maroonColor,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(4),
-            ),
-            disabledBackgroundColor: Colors.grey.shade400,
-          ),
-          child: _isAdding
-              ? SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              color: Colors.white,
-              strokeWidth: 2,
-            ),
-          )
-              : Text(
-            'ADD',
-            style: GoogleFonts.roboto(
-              fontWeight: FontWeight.w500,
-              letterSpacing: 1,
-            ),
-          ),
-        ),
-      ],
-    );
-      },
-      ),
-  );
-}
-
-void _showEditVideoDialog(String sectionTitle, Video video, int videoIndex) {
-  final TextEditingController _titleController = TextEditingController(text: video.title);
-  final TextEditingController _urlController = TextEditingController(text: video.videoUrl);
-  bool _isUpdating = false;
-
-  showDialog(
-    context: context,
-    builder: (context) {
-      return StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(4),
           ),
           title: Text(
-            'Edit Video',
+            'Add Section',
             style: GoogleFonts.roboto(
               fontWeight: FontWeight.w600,
               color: greenColor,
@@ -3147,7 +2700,7 @@ void _showEditVideoDialog(String sectionTitle, Video video, int videoIndex) {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Video Title',
+                'Section Title',
                 style: GoogleFonts.roboto(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
@@ -3156,36 +2709,9 @@ void _showEditVideoDialog(String sectionTitle, Video video, int videoIndex) {
               ),
               SizedBox(height: 8),
               TextField(
-                controller: _titleController,
+                controller: _sectionTitleController,
                 decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                    borderSide: BorderSide(color: yellowColor, width: 2),
-                  ),
-                  contentPadding: EdgeInsets.all(12),
-                ),
-                style: GoogleFonts.roboto(
-                  fontSize: 14,
-                  color: textColor,
-                ),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Video URL',
-                style: GoogleFonts.roboto(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: textSecondaryColor,
-                ),
-              ),
-              SizedBox(height: 8),
-              TextField(
-                controller: _urlController,
-                decoration: InputDecoration(
+                  hintText: 'Enter section title',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),
                     borderSide: BorderSide(color: Colors.grey.shade300),
@@ -3216,38 +2742,28 @@ void _showEditVideoDialog(String sectionTitle, Video video, int videoIndex) {
               ),
             ),
             ElevatedButton(
-              onPressed: _isUpdating ? null : () async {
-                String newTitle = _titleController.text.trim();
-                String newUrl = _urlController.text.trim();
-
-                if (newTitle.isEmpty || newUrl.isEmpty) {
-                  _showErrorSnackbar('Please fill out both title and URL');
-                  return;
-                }
-
-                String? videoId = YoutubePlayer.convertUrlToId(newUrl);
-                if (videoId == null) {
-                  _showErrorSnackbar('Please enter a valid YouTube URL');
-                  return;
-                }
-
-                setState(() {
-                  _isUpdating = true;
-                });
-
-                try {
-                  final courseProvider = Provider.of<CourseProvider>(context, listen: false);
-                  await courseProvider.updateVideo(_course!.id!, sectionTitle, videoIndex, newTitle, newUrl);
-
-                  Navigator.pop(context);
-                  _showSuccessSnackbar('Video updated successfully!');
-                  await _initializeCourse();
-                } catch (e) {
-                  _showErrorSnackbar('Failed to update video: $e');
-                } finally {
+              onPressed: _isAdding ? null : () async {
+                if (_sectionTitleController.text.isNotEmpty) {
                   setState(() {
-                    _isUpdating = false;
+                    _isAdding = true;
                   });
+
+                  try {
+                    final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+                    await courseProvider.addSection(widget.courseId, _sectionTitleController.text);
+
+                    Navigator.pop(context);
+                    _showSuccessSnackbar('Section added successfully!');
+                    await _initializeCourse();
+                  } catch (e) {
+                    _showErrorSnackbar('Failed to add section: $e');
+                  } finally {
+                    setState(() {
+                      _isAdding = false;
+                    });
+                  }
+                } else {
+                  _showErrorSnackbar('Please enter a section title');
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -3259,7 +2775,7 @@ void _showEditVideoDialog(String sectionTitle, Video video, int videoIndex) {
                 ),
                 disabledBackgroundColor: Colors.grey.shade400,
               ),
-              child: _isUpdating
+              child: _isAdding
                   ? SizedBox(
                 width: 16,
                 height: 16,
@@ -3269,7 +2785,7 @@ void _showEditVideoDialog(String sectionTitle, Video video, int videoIndex) {
                 ),
               )
                   : Text(
-                'SAVE',
+                'ADD',
                 style: GoogleFonts.roboto(
                   fontWeight: FontWeight.w500,
                   letterSpacing: 1,
@@ -3278,148 +2794,838 @@ void _showEditVideoDialog(String sectionTitle, Video video, int videoIndex) {
             ),
           ],
         ),
-      );
-    },
-  );
-}
+      ),
+    );
+  }
 
-void _deleteVideo(String courseId, String sectionTitle, int videoIndex) async {
-  final shouldDelete = await showDialog<bool>(
-    context: context,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-        ),
-        title: Text(
-          'Delete Video',
-          style: GoogleFonts.roboto(
-            fontWeight: FontWeight.w600,
-            color: maroonColor,
-          ),
-        ),
-        content: Text(
-          'Are you sure you want to delete this video?',
-          style: GoogleFonts.roboto(
-            color: textColor,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(
-              'CANCEL',
-              style: GoogleFonts.roboto(
-                color: textSecondaryColor,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: maroonColor,
-              foregroundColor: Colors.white,
-              elevation: 0,
+  void _showEditSectionDialog(Section section, int sectionIndex) {
+    final TextEditingController _sectionTitleController = TextEditingController(text: section.sectionTitle);
+    bool _isUpdating = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(4),
               ),
-            ),
-            child: Text(
-              'DELETE',
-              style: GoogleFonts.roboto(
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1,
+              title: Text(
+                'Edit Section',
+                style: GoogleFonts.roboto(
+                  fontWeight: FontWeight.w600,
+                  color: greenColor,
+                ),
               ),
-            ),
-          ),
-        ],
-      );
-    },
-  );
-
-  if (shouldDelete == true) {
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Section Title',
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textSecondaryColor,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  TextField(
+                    controller: _sectionTitleController,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: yellowColor, width: 2),
+                      ),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      color: textColor,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+              TextButton(
+              onPressed: () => Navigator.pop(context),
+      child: Text(
+        'CANCEL',
+        style: GoogleFonts.roboto(
+          color: textSecondaryColor,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 1,
+        ),
+      ),
+    ),
+    ElevatedButton(
+    onPressed: _isUpdating ? null : () async {
+    if (_sectionTitleController.text.isNotEmpty) {
     setState(() {
-      isActionLoading = true;
+    _isUpdating = true;
     });
 
     try {
-      final courseProvider = Provider.of<CourseProvider>(context, listen: false);
-      await courseProvider.deleteVideo(courseId, sectionTitle, videoIndex);
+    final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+    await courseProvider.editSection(
+    widget.courseId,
+    section.sectionTitle ?? '',
+    _sectionTitleController.text);
 
-      setState(() {
-        isActionLoading = false;
-      });
-
-      _showSuccessSnackbar('Video deleted successfully');
-      await _initializeCourse();
+    Navigator.pop(context);
+    _showSuccessSnackbar('Section updated successfully!');
+    await _initializeCourse();
     } catch (e) {
+      _showErrorSnackbar('Failed to update section: $e');
+    } finally {
       setState(() {
-        isActionLoading = false;
+        _isUpdating = false;
       });
-
-      _showErrorSnackbar('Failed to delete video: $e');
     }
-  }
-}
-
-// Helper methods for floating action button and notifications
-Widget? _buildFloatingActionButton() {
-  if (isAdmin) {
-    return FloatingActionButton(
-      onPressed: () => _showAddSectionDialog(context),
-      backgroundColor: maroonColor,
-      foregroundColor: Colors.white,
-      elevation: 4,
-      tooltip: 'Add Section',
-      child: Icon(Icons.add),
+    } else {
+      _showErrorSnackbar('Please enter a section title');
+    }
+    },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: maroonColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+        ),
+        disabledBackgroundColor: Colors.grey.shade400,
+      ),
+      child: _isUpdating
+          ? SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(
+          color: Colors.white,
+          strokeWidth: 2,
+        ),
+      )
+          : Text(
+        'SAVE',
+        style: GoogleFonts.roboto(
+          fontWeight: FontWeight.w500,
+          letterSpacing: 1,
+        ),
+      ),
+    ),
+              ],
+          ),
+      ),
     );
   }
-  return null;
-}
 
-void _showErrorSnackbar(String message) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        message,
-        style: GoogleFonts.roboto(
-          color: Colors.white,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      backgroundColor: maroonColor,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(4),
-      ),
-      margin: EdgeInsets.all(8),
-      duration: Duration(seconds: 3),
-    ),
-  );
-}
+  void _confirmDeleteSection(int sectionIndex, Section section) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(4),
+          ),
+          title: Text(
+            'Delete Section',
+            style: GoogleFonts.roboto(
+              fontWeight: FontWeight.w600,
+              color: maroonColor,
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to delete the "${section.sectionTitle}" section? This will remove all videos and resources in this section.',
+            style: GoogleFonts.roboto(
+              color: textColor,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'CANCEL',
+                style: GoogleFonts.roboto(
+                  color: textSecondaryColor,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: isActionLoading
+                  ? null
+                  : () async {
+                setState(() => isActionLoading = true);
 
-void _showSuccessSnackbar(String message) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        message,
-        style: GoogleFonts.roboto(
-          color: Colors.white,
-          fontWeight: FontWeight.w500,
+                try {
+                  await Provider.of<CourseProvider>(context, listen: false)
+                      .deleteSection(widget.courseId, section.sectionTitle ?? '');
+
+                  Navigator.of(context).pop();
+                  _showSuccessSnackbar('Section deleted successfully!');
+                  await _initializeCourse();
+                } catch (e) {
+                  _showErrorSnackbar('Failed to delete section: $e');
+                } finally {
+                  setState(() => isActionLoading = false);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: maroonColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                disabledBackgroundColor: Colors.grey.shade400,
+              ),
+              child: isActionLoading
+                  ? SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+                  : Text(
+                'DELETE',
+                style: GoogleFonts.roboto(
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showAddResourceDialog(String courseId, String sectionTitle) {
+    final TextEditingController _titleController = TextEditingController();
+    final TextEditingController _urlController = TextEditingController();
+    String resourceType = "Video"; // Default type is Video
+    PlatformFile? pickedPdf; // Holds the picked PDF file if any
+    bool _isAdding = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
+            title: Text(
+              'Add Resource',
+              style: GoogleFonts.roboto(
+                fontWeight: FontWeight.w600,
+                color: greenColor,
+              ),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Resource type selector
+                  Text(
+                    'Resource Type',
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textSecondaryColor,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: RadioListTile<String>(
+                          title: Text(
+                            'Video',
+                            style: GoogleFonts.roboto(
+                              fontSize: 14,
+                              color: textColor,
+                            ),
+                          ),
+                          value: "Video",
+                          groupValue: resourceType,
+                          activeColor: yellowColor,
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          onChanged: (value) {
+                            setState(() {
+                              resourceType = value!;
+                              pickedPdf = null;
+                              _urlController.clear();
+                            });
+                          },
+                        ),
+                      ),
+                      Expanded(
+                        child: RadioListTile<String>(
+                          title: Text(
+                            'PDF',
+                            style: GoogleFonts.roboto(
+                              fontSize: 14,
+                              color: textColor,
+                            ),
+                          ),
+                          value: "PDF",
+                          groupValue: resourceType,
+                          activeColor: yellowColor,
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          onChanged: (value) {
+                            setState(() {
+                              resourceType = value!;
+                              _urlController.clear();
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+
+                  // Resource title field
+                  Text(
+                    resourceType == "Video" ? 'Video Title' : 'PDF Title',
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textSecondaryColor,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  TextField(
+                    controller: _titleController,
+                    decoration: InputDecoration(
+                      hintText: 'Enter title',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: yellowColor, width: 2),
+                      ),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    style: GoogleFonts.roboto(
+                      fontSize: 14,
+                      color: textColor,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+
+                  // URL field for Video or file picker for PDF
+                  if (resourceType == "Video") ...[
+                    Text(
+                      'Video URL',
+                      style: GoogleFonts.roboto(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: textSecondaryColor,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    TextField(
+                      controller: _urlController,
+                      decoration: InputDecoration(
+                        hintText: 'Enter YouTube URL',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: BorderSide(color: yellowColor, width: 2),
+                        ),
+                        contentPadding: EdgeInsets.all(12),
+                      ),
+                      style: GoogleFonts.roboto(
+                        fontSize: 14,
+                        color: textColor,
+                      ),
+                    ),
+                  ] else ...[
+                    Text(
+                      'PDF File',
+                      style: GoogleFonts.roboto(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: textSecondaryColor,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          FilePickerResult? result =
+                          await FilePicker.platform.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: ['pdf'],
+                          );
+                          if (result != null && result.files.isNotEmpty) {
+                            setState(() {
+                              pickedPdf = result.files.first;
+                              _urlController.text = pickedPdf!.name;
+                            });
+                          }
+                        },
+                        icon: Icon(Icons.attach_file_outlined, size: 18),
+                        label: Text('SELECT PDF FILE'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: yellowColor,
+                          side: BorderSide(color: yellowColor),
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          textStyle: GoogleFonts.roboto(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (pickedPdf != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          'Selected: ${pickedPdf!.name}',
+                          style: GoogleFonts.roboto(
+                            fontSize: 14,
+                            fontStyle: FontStyle.italic,
+                            color: textSecondaryColor,
+                          ),
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'CANCEL',
+                  style: GoogleFonts.roboto(
+                    color: textSecondaryColor,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: _isAdding ? null : () async {
+                  String title = _titleController.text.trim();
+                  if (title.isEmpty) {
+                    _showErrorSnackbar('Please enter a resource title');
+                    return;
+                  }
+
+                  setState(() {
+                    _isAdding = true;
+                  });
+
+                  try {
+                    if (resourceType == "Video") {
+                      String url = _urlController.text.trim();
+                      if (url.isEmpty) {
+                        _showErrorSnackbar('Please enter a video URL');
+                        setState(() {
+                          _isAdding = false;
+                        });
+                        return;
+                      }
+
+                      String? videoId = YoutubePlayer.convertUrlToId(url);
+                      if (videoId == null) {
+                        _showErrorSnackbar('Please enter a valid YouTube URL');
+                        setState(() {
+                          _isAdding = false;
+                        });
+                        return;
+                      }
+
+                      await Provider.of<CourseProvider>(context, listen: false)
+                          .addVideoToSection(courseId, sectionTitle, Video(title: title, videoUrl: url));
+                    } else {
+                      if (pickedPdf == null) {
+                        _showErrorSnackbar('Please pick a PDF file');
+                        setState(() {
+                          _isAdding = false;
+                        });
+                        return;
+                      }
+
+                      File pdfFile = File(pickedPdf!.path!);
+                      String? uploadedPdfUrl = await Provider.of<CourseProvider>(context, listen: false)
+                          .uploadPdf(pdfFile);
+
+                      if (uploadedPdfUrl != null) {
+                        await Provider.of<CourseProvider>(context, listen: false)
+                            .addPdfToSection(courseId, sectionTitle, title, uploadedPdfUrl);
+                      } else {
+                        _showErrorSnackbar('Failed to upload PDF');
+                        setState(() {
+                          _isAdding = false;
+                        });
+                        return;
+                      }
+                    }
+
+                    Navigator.pop(context);
+                    _showSuccessSnackbar('Resource added successfully!');
+                    await _initializeCourse();
+                  } catch (e) {
+                    _showErrorSnackbar('Failed to add resource: $e');
+                  } finally {
+                    setState(() {
+                      _isAdding = false;
+                    });
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: maroonColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  disabledBackgroundColor: Colors.grey.shade400,
+                ),
+                child: _isAdding
+                    ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+                    : Text(
+                  'ADD',
+                  style: GoogleFonts.roboto(
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showEditVideoDialog(String sectionTitle, Video video, int videoIndex) {
+    final TextEditingController _titleController = TextEditingController(text: video.title);
+    final TextEditingController _urlController = TextEditingController(text: video.videoUrl);
+    bool _isUpdating = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
+            title: Text(
+              'Edit Video',
+              style: GoogleFonts.roboto(
+                fontWeight: FontWeight.w600,
+                color: greenColor,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Video Title',
+                  style: GoogleFonts.roboto(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: textSecondaryColor,
+                  ),
+                ),
+                SizedBox(height: 8),
+                TextField(
+                  controller: _titleController,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: BorderSide(color: yellowColor, width: 2),
+                    ),
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                  style: GoogleFonts.roboto(
+                    fontSize: 14,
+                    color: textColor,
+                  ),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Video URL',
+                  style: GoogleFonts.roboto(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: textSecondaryColor,
+                  ),
+                ),
+                SizedBox(height: 8),
+                TextField(
+                  controller: _urlController,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: BorderSide(color: yellowColor, width: 2),
+                    ),
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                  style: GoogleFonts.roboto(
+                    fontSize: 14,
+                    color: textColor,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'CANCEL',
+                  style: GoogleFonts.roboto(
+                    color: textSecondaryColor,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: _isUpdating ? null : () async {
+                  String newTitle = _titleController.text.trim();
+                  String newUrl = _urlController.text.trim();
+
+                  if (newTitle.isEmpty || newUrl.isEmpty) {
+                    _showErrorSnackbar('Please fill out both title and URL');
+                    return;
+                  }
+
+                  String? videoId = YoutubePlayer.convertUrlToId(newUrl);
+                  if (videoId == null) {
+                    _showErrorSnackbar('Please enter a valid YouTube URL');
+                    return;
+                  }
+
+                  setState(() {
+                    _isUpdating = true;
+                  });
+
+                  try {
+                    final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+                    await courseProvider.updateVideo(_course!.id!, sectionTitle, videoIndex, newTitle, newUrl);
+
+                    Navigator.pop(context);
+                    _showSuccessSnackbar('Video updated successfully!');
+                    await _initializeCourse();
+                  } catch (e) {
+                    _showErrorSnackbar('Failed to update video: $e');
+                  } finally {
+                    setState(() {
+                      _isUpdating = false;
+                    });
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: maroonColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  disabledBackgroundColor: Colors.grey.shade400,
+                ),
+                child: _isUpdating
+                    ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+                    : Text(
+                  'SAVE',
+                  style: GoogleFonts.roboto(
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _deleteVideo(String courseId, String sectionTitle, int videoIndex) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(4),
+          ),
+          title: Text(
+            'Delete Video',
+            style: GoogleFonts.roboto(
+              fontWeight: FontWeight.w600,
+              color: maroonColor,
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to delete this video?',
+            style: GoogleFonts.roboto(
+              color: textColor,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'CANCEL',
+                style: GoogleFonts.roboto(
+                  color: textSecondaryColor,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: maroonColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              child: Text(
+                'DELETE',
+                style: GoogleFonts.roboto(
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete == true) {
+      setState(() {
+        isActionLoading = true;
+      });
+
+      try {
+        final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+        await courseProvider.deleteVideo(courseId, sectionTitle, videoIndex);
+
+        setState(() {
+          isActionLoading = false;
+        });
+
+        _showSuccessSnackbar('Video deleted successfully');
+        await _initializeCourse();
+      } catch (e) {
+        setState(() {
+          isActionLoading = false;
+        });
+
+        _showErrorSnackbar('Failed to delete video: $e');
+      }
+    }
+  }
+
+// Helper methods for floating action button and notifications
+  Widget? _buildFloatingActionButton() {
+    if (isAdmin) {
+      return FloatingActionButton(
+        onPressed: () => _showAddSectionDialog(context),
+        backgroundColor: maroonColor,
+        foregroundColor: Colors.white,
+        elevation: 4,
+        tooltip: 'Add Section',
+        child: Icon(Icons.add),
+      );
+    }
+    return null;
+  }
+
+  void _showErrorSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.roboto(
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+          ),
         ),
+        backgroundColor: maroonColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+        ),
+        margin: EdgeInsets.all(8),
+        duration: Duration(seconds: 3),
       ),
-      backgroundColor: yellowColor,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(4),
+    );
+  }
+
+  void _showSuccessSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.roboto(
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        backgroundColor: yellowColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+        ),
+        margin: EdgeInsets.all(8),
+        duration: Duration(seconds: 2),
       ),
-      margin: EdgeInsets.all(8),
-      duration: Duration(seconds: 2),
-    ),
-  );
-}
+    );
+  }
 }
 
 // PDF Preview Screen with the updated style

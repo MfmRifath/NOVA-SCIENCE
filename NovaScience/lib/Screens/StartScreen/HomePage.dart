@@ -231,7 +231,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'NOVA SCIENCE',
+                'NOVA LEARN',
                 style: GoogleFonts.roboto(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,

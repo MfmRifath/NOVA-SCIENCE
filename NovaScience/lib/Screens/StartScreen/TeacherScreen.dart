@@ -276,7 +276,7 @@ class _TeacherScreenState extends State<TeacherScreen>
                     tween: Tween<double>(begin: 0, end: earnings),
                     builder: (context, double value, child) {
                       return Text(
-                        '\$${value.toStringAsFixed(2)}',
+                        '\RS: ${value.toStringAsFixed(2)}',
                         style: GoogleFonts.poppins(
                           color: textLightColor,
                           fontSize: 28,
@@ -421,7 +421,7 @@ class _TeacherScreenState extends State<TeacherScreen>
                             ),
                           ),
                           trailing: Text(
-                            '\$${totalEarning.toStringAsFixed(2)}',
+                            '\RS: ${totalEarning.toStringAsFixed(2)}',
                             style: GoogleFonts.poppins(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
@@ -1322,7 +1322,7 @@ class _TeacherScreenState extends State<TeacherScreen>
                 ),
               ),
               child: Text(
-                '\$${earnings.toStringAsFixed(2)}',
+                '\RS: ${earnings.toStringAsFixed(2)}',
                 style: GoogleFonts.poppins(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,

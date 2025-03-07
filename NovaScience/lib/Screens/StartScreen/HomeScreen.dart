@@ -257,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
           SizedBox(width: 12),
           Text(
-            'NOVA SCIENCE',
+            'NOVA LEARN',
             style: GoogleFonts.roboto(
               fontSize: 18,
               fontWeight: FontWeight.w700,
@@ -302,7 +302,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Welcome to Nova Science',
+            'Welcome to Nova Learn',
             style: GoogleFonts.roboto(
               fontSize: 22,
               fontWeight: FontWeight.w700,

@@ -234,7 +234,7 @@ class _SignUpScreenState extends State<SignUpScreen> with SingleTickerProviderSt
                             ),
                             SizedBox(width: 12),
                             Text(
-                              'NOVA SCIENCE',
+                              'NOVA LEARN',
                               style: GoogleFonts.roboto(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,

@@ -170,11 +170,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           updatedData['birthday'] = Timestamp.fromDate(_birthday!);
         }
 
-        // Update the user profile
+        print('About to update with data: $updatedData');
         await authService.updateUser(
           updatedData: updatedData,
           newProfileImage: _profileImage,
         );
+        print('Update completed');
 
         if (!mounted) return;
 
