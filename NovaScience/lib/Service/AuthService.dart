@@ -113,7 +113,7 @@ class AuthService with ChangeNotifier {
     required String name,
     required String email,
     required String password,
-    required String role,
+    String? role,
     String? phoneNumber,
     String? location,
     Timestamp? birthday,
@@ -127,50 +127,42 @@ class AuthService with ChangeNotifier {
         password: password,
       );
 
-      _user = CustomUser(
-        id: userCredential.user!.uid,
-        name: name,
-        email: email,
-        role: role,
-        profileImageUrl: '',
-        phoneNumber: phoneNumber,
-        location: location,
-        birthday: birthday?.toDate(),
-        bio: bio,
-        isLoggedIn: true,
-        registeredDate: DateTime.now(),
-        enrollments: [],
-      );
+      String userId = userCredential.user!.uid;
 
       // Upload profile image to Firebase Storage
       String? profileImageUrl;
       if (profileImage != null) {
         TaskSnapshot uploadTask = await _storage
-            .ref('profile_images/${_user!.id}')
+            .ref('profile_images/$userId')
             .putFile(profileImage);
         profileImageUrl = await uploadTask.ref.getDownloadURL();
       }
 
-      // Save user data in Firestore
-      await _firestore.collection('users').doc(_user!.id).set({
+      // Current timestamp for registration and last active
+      final now = FieldValue.serverTimestamp();
+
+      // Save user data in Firestore with consistent field naming
+      await _firestore.collection('users').doc(userId).set({
         'name': name,
         'email': email,
-        'role': role,
-        'profileImageUrl':
-        profileImageUrl ?? "https://via.placeholder.com/150",
+        'role': role ?? 'User',
         'phoneNumber': phoneNumber,
         'location': location,
         'birthday': birthday,
         'bio': bio,
+        'profileImageUrl': profileImageUrl ?? "https://via.placeholder.com/150",
         'isLoggedin': true,
-        'registeredDate': Timestamp.now(),
+        'isLoggedIn': true,  // Add both versions for API compatibility
+        'registeredDate': now,  // Keep original field for backward compatibility
+        'registrationDate': now, // Add new field for consistent API
+        'lastActiveTime': now,
         'enrolledCourses': [],
       });
 
-      notifyListeners(); // Notify listeners after user is created
+      notifyListeners();
     } catch (e) {
       print('Error adding user: $e');
-      // Optionally, handle errors by rethrowing or using another mechanism
+      rethrow;  // Rethrow to allow caller to handle the error
     }
   }
 
@@ -310,7 +302,52 @@ class AuthService with ChangeNotifier {
       rethrow;
     }
   }
+  Future<void> updateUserByEmail({
+    required String email,
+    required Map<String, dynamic> updatedData,
+  }) async {
+    try {
+      // First, find the user document by email
+      final userQuery = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .get();
 
+      if (userQuery.docs.isEmpty) {
+        throw Exception('No user found with this email.');
+      }
+
+      final userDoc = userQuery.docs.first;
+      final userId = userDoc.id;
+
+      // Check if we need to update login status
+      if (updatedData.containsKey('isLoggedIn')) {
+        updatedData['isLoggedin'] = updatedData['isLoggedIn'];
+      }
+      if (updatedData.containsKey('isLoggedin')) {
+        updatedData['isLoggedIn'] = updatedData['isLoggedin'];
+      }
+
+      // Update both field versions if we're updating registration date
+      if (updatedData.containsKey('registrationDate')) {
+        updatedData['registeredDate'] = updatedData['registrationDate'];
+      }
+      if (updatedData.containsKey('registeredDate')) {
+        updatedData['registrationDate'] = updatedData['registeredDate'];
+      }
+
+      // Always update the last active time
+      updatedData['lastActiveTime'] = FieldValue.serverTimestamp();
+
+      // Update the document
+      await _firestore.collection('users').doc(userId).update(updatedData);
+
+      notifyListeners();
+    } catch (e) {
+      print('Error updating user by email: $e');
+      rethrow;
+    }
+  }
   /// Fetches all users from Firestore.
   Future<List<DocumentSnapshot>> getAllUsers() async {
     try {
@@ -421,30 +458,6 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Updates a user's data by their email.
-  Future<void> updateUserByEmail({
-    required String email,
-    required Map<String, dynamic> updatedData,
-  }) async {
-    try {
-      final userQuery = await _firestore
-          .collection('users')
-          .where('email', isEqualTo: email)
-          .get();
-
-      if (userQuery.docs.isEmpty) {
-        print('No user found with this email.');
-        return;
-      }
-
-      final userDoc = userQuery.docs.first;
-      await _firestore.collection('users').doc(userDoc.id).update(updatedData);
-      notifyListeners(); // Notify after updating user by email
-    } catch (e) {
-      print('Error updating user by email: $e');
-      // Optionally, handle errors by rethrowing or using another mechanism
-    }
-  }
 
   /// Fetches a user with their enrolled courses based on UID.
   Future<CustomUser?> fetchUserWithCourses(String userId) async {
@@ -492,8 +505,28 @@ class AuthService with ChangeNotifier {
     List<CustomUser> users = [];
     try {
       QuerySnapshot querySnapshot = await _firestore.collection('users').get();
+
       for (var doc in querySnapshot.docs) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+        // Create consistent field naming
+        if (data.containsKey('registeredDate') && !data.containsKey('registrationDate')) {
+          data['registrationDate'] = data['registeredDate'];
+        }
+        if (data.containsKey('registrationDate') && !data.containsKey('registeredDate')) {
+          data['registeredDate'] = data['registrationDate'];
+        }
+
+        // Ensure isLoggedIn field exists
+        if (data.containsKey('isLoggedin') && !data.containsKey('isLoggedIn')) {
+          data['isLoggedIn'] = data['isLoggedin'];
+        }
+
+        // Add lastActiveTime if missing
+        if (!data.containsKey('lastActiveTime')) {
+          data['lastActiveTime'] = data['registeredDate']; // Use registration date as fallback
+        }
+
         users.add(CustomUser.fromMap(data, doc.id));
       }
     } catch (e) {
@@ -501,7 +534,9 @@ class AuthService with ChangeNotifier {
     }
     return users;
   }
-  Future<int> getEnrollmentCount(String courseId) async {
+
+
+Future<int> getEnrollmentCount(String courseId) async {
     try {
       // Fetch all users
       QuerySnapshot query = await FirebaseFirestore.instance.collection('users').get();
@@ -599,4 +634,14 @@ class AuthService with ChangeNotifier {
       print('Error checking expired courses: $e');
     }
   }
+  Future<void> updateLastActiveTime(String userId) async {
+    try {
+      await _firestore.collection('users').doc(userId).update({
+        'lastActiveTime': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print("Error updating last active time: $e");
+    }
   }
+
+}

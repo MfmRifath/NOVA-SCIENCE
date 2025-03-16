@@ -1,117 +1,156 @@
+// CustomUser.dart
+// Update your User model with these fields to fix the errors
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CustomUser {
-  String? id;
-  String? name;
-  String? email;
-  String? profileImageUrl;
-  String? role; // 'Admin' or 'User'
-  String? phoneNumber;
-  String? location;
-  DateTime? birthday;
-  String? bio;
-  bool? isLoggedIn;
-  DateTime? registeredDate;
-  late final List<Enrollment>? enrollments;
+  final String? id;
+  final String? name;
+  final String? email;
+  final String? role;
+  final String? phoneNumber;
+  final String? location;
+  final DateTime? birthday;
+  final String? bio;
+  final String? profileImageUrl;
+  final bool? isLoggedIn;
+  final DateTime? registrationDate; // Changed from registeredDate to match usage
+  final DateTime? lastActiveTime;   // Added this field
+  final List<Enrollment>? enrollments;
 
   CustomUser({
     this.id,
     this.name,
     this.email,
-    this.profileImageUrl,
     this.role,
     this.phoneNumber,
     this.location,
     this.birthday,
     this.bio,
-    this.isLoggedIn,
-    this.registeredDate,
+    this.profileImageUrl,
+    this.isLoggedIn = false,
+    DateTime? registrationDate, // Allow both naming conventions
+    DateTime? registeredDate,   // Allow both naming conventions
+    this.lastActiveTime,
     this.enrollments,
-  });
+  }) : this.registrationDate = registrationDate ?? registeredDate; // Use either name
 
+  // Create a factory constructor to convert from Firestore
   factory CustomUser.fromMap(Map<String, dynamic> data, String documentId) {
-    // Debug print: log the raw data retrieved from Firestore.
-    print('Creating CustomUser from data: $data with id: $documentId');
-
     return CustomUser(
       id: documentId,
-      // Explicitly cast the value to String?
-      name: data['name'] as String?,
-      email: data['email'] as String?,
-      profileImageUrl: data['profileImageUrl'] as String?,
-      role: data['role'] as String?,
-      phoneNumber: data['phoneNumber'] as String?,
-      location: data['location'] as String?,
-      birthday: data['birthday'] != null ? (data['birthday'] as Timestamp).toDate() : null,
-      bio: data['bio'] as String?,
-      isLoggedIn: data['isLoggedin'] as bool?,
-      registeredDate: data['registeredDate'] != null ? (data['registeredDate'] as Timestamp).toDate() : null,
+      name: data['name'],
+      email: data['email'],
+      role: data['role'],
+      phoneNumber: data['phoneNumber'],
+      location: data['location'],
+      birthday: data['birthday'] != null ?
+      (data['birthday'] as Timestamp).toDate() : null,
+      bio: data['bio'],
+      profileImageUrl: data['profileImageUrl'],
+      isLoggedIn: data['isLoggedin'] ?? false, // Note: matches Firestore field
+      registrationDate: data['registeredDate'] != null ?
+      (data['registeredDate'] as Timestamp).toDate() : null,
+      lastActiveTime: data['lastActiveTime'] != null ?
+      (data['lastActiveTime'] as Timestamp).toDate() :
+      (data['lastLogin'] != null ? (data['lastLogin'] as Timestamp).toDate() : null),
       enrollments: convertEnrollments(data['enrolledCourses']),
     );
   }
 
+  // Utility method to convert enrollments
+  static List<Enrollment>? convertEnrollments(dynamic enrolledCourses) {
+    if (enrolledCourses == null) return [];
 
+    try {
+      return (enrolledCourses as List).map((course) {
+        if (course is Map<String, dynamic>) {
+          return Enrollment.fromMap(course);
+        }
+        return Enrollment(courseId: 'unknown', enrollmentDate: DateTime.now());
+      }).toList();
+    } catch (e) {
+      print('Error converting enrollments: $e');
+      return [];
+    }
+  }
+
+  // Create a copy with method to easily update user properties
+  CustomUser copyWith({
+    String? id,
+    String? name,
+    String? email,
+    String? role,
+    String? phoneNumber,
+    String? location,
+    DateTime? birthday,
+    String? bio,
+    String? profileImageUrl,
+    bool? isLoggedIn,
+    DateTime? registrationDate,
+    DateTime? lastActiveTime,
+    List<Enrollment>? enrollments,
+  }) {
+    return CustomUser(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      role: role ?? this.role,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      location: location ?? this.location,
+      birthday: birthday ?? this.birthday,
+      bio: bio ?? this.bio,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      isLoggedIn: isLoggedIn ?? this.isLoggedIn,
+      registrationDate: registrationDate ?? this.registrationDate,
+      lastActiveTime: lastActiveTime ?? this.lastActiveTime,
+      enrollments: enrollments ?? this.enrollments,
+    );
+  }
+
+  // Convert to map for Firestore
   Map<String, dynamic> toMap() {
     return {
-      'name': name ,
+      'name': name,
       'email': email,
-      'profileImageUrl': profileImageUrl,
       'role': role,
       'phoneNumber': phoneNumber,
       'location': location,
       'birthday': birthday != null ? Timestamp.fromDate(birthday!) : null,
       'bio': bio,
+      'profileImageUrl': profileImageUrl,
       'isLoggedin': isLoggedIn,
-      'registeredDate': registeredDate != null ? Timestamp.fromDate(registeredDate!) : null,
-      'enrolledCourses': enrollments?.map((e) => e.toMap()).toList() ?? [],
+      'registeredDate': registrationDate != null ?
+      Timestamp.fromDate(registrationDate!) : null,
+      'lastActiveTime': lastActiveTime != null ?
+      Timestamp.fromDate(lastActiveTime!) : null,
+      'enrolledCourses': enrollments?.map((e) => e.toMap()).toList(),
     };
-  }
-  static List<Enrollment>? convertEnrollments(dynamic firestoreData) {
-    if (firestoreData == null) return [];
-
-    try {
-      List<Enrollment> enrollments = [];
-
-      for (var item in firestoreData) {
-        // Handle simple string IDs
-        if (item is String) {
-          enrollments.add(Enrollment(
-            courseId: item,
-            enrollmentDate: DateTime.now(),
-            endDate: DateTime.now().add(Duration(days: 365)),
-          ));
-        }
-        // Handle map format
-        else if (item is Map<String, dynamic>) {
-          enrollments.add(Enrollment.fromMap(item));
-        }
-      }
-
-      return enrollments;
-    } catch (e) {
-      print('Error converting enrollments: $e');
-      // Return empty list instead of null to prevent further errors
-      return [];
-    }
   }
 }
 
+// Enrollment class for user's course enrollments
 class Enrollment {
   final String courseId;
   final DateTime enrollmentDate;
-  final DateTime endDate;
+  final DateTime? enrollmentEndDate;
+  final String? status;
 
   Enrollment({
     required this.courseId,
     required this.enrollmentDate,
-    required this.endDate,
+    this.enrollmentEndDate,
+    this.status,
   });
 
-  factory Enrollment.fromMap(Map<String, dynamic> data) {
+  factory Enrollment.fromMap(Map<String, dynamic> map) {
     return Enrollment(
-      courseId: data['courseId'] as String,
-      enrollmentDate: (data['enrollmentDate'] as Timestamp).toDate(),
-      endDate: (data['enrollmentEndDate'] as Timestamp).toDate(),
+      courseId: map['courseId'] ?? '',
+      enrollmentDate: map['enrollmentDate'] != null ?
+      (map['enrollmentDate'] as Timestamp).toDate() : DateTime.now(),
+      enrollmentEndDate: map['enrollmentEndDate'] != null ?
+      (map['enrollmentEndDate'] as Timestamp).toDate() : null,
+      status: map['status'],
     );
   }
 
@@ -119,7 +158,9 @@ class Enrollment {
     return {
       'courseId': courseId,
       'enrollmentDate': Timestamp.fromDate(enrollmentDate),
-      'enrollmentEndDate': Timestamp.fromDate(endDate),
+      'enrollmentEndDate': enrollmentEndDate != null ?
+      Timestamp.fromDate(enrollmentEndDate!) : null,
+      'status': status,
     };
   }
 }

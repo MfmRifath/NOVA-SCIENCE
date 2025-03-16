@@ -484,7 +484,7 @@ class _SignInScreenState extends State<SignInScreen> {
               Padding(
                 padding: EdgeInsets.only(top: 24, bottom: bottomPadding),
                 child: Text(
-                  '© 2025 NOVA SCIENCE. All Rights Reserved.',
+                  '© 2025 NOVA LEARN. All Rights Reserved.',
                   style: GoogleFonts.roboto(
                     fontSize: isLargeScreen ? 12 : 11,
                     color: Colors.grey.shade600,

@@ -1,96 +1,16 @@
-import 'dart:io';
-
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
+import 'dart:io';
 
-// Your own imports
 import '../../Modals/CourseAndSectionAndVideos.dart';
 import '../../Service/CourseProvider.dart';
+import 'CMSAppBar.dart';
+
+import 'CMSDesignSystem.dart';
 import 'CourseDetailScreen.dart';
-
-// Custom color palette
-class AppColors {
-  static const Color primaryGreen = Color(0xFF11261F);
-  static const Color secondaryBlue = Color(0xFF123755);
-  static const Color accentMaroon = Color(0xFF722626);
-  static const Color lightGreen = Color(0xFF1A3F33);
-  static const Color lightBlue = Color(0xFF1D517D);
-  static const Color lightMaroon = Color(0xFF8F3F3F);
-  static const Color backgroundLight = Color(0xFFF5F5F5);
-  static const Color cardBg = Color(0xFFFDFDFD);
-  static const Color textLight = Color(0xFFEEEEEE);
-  static const Color textDark = Color(0xFF333333);
-}
-
-// Custom theme
-final ThemeData appTheme = ThemeData(
-  primaryColor: AppColors.primaryGreen,
-  scaffoldBackgroundColor: AppColors.backgroundLight,
-  appBarTheme: AppBarTheme(
-    backgroundColor: AppColors.primaryGreen,
-    foregroundColor: AppColors.textLight,
-    elevation: 0,
-  ),
-  tabBarTheme: TabBarTheme(
-    labelColor: AppColors.textLight,
-    unselectedLabelColor: AppColors.textLight.withOpacity(0.7),
-    indicatorColor: AppColors.secondaryBlue,
-  ),
-  cardTheme: CardTheme(
-    color: AppColors.cardBg,
-    elevation: 2,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-  ),
-  elevatedButtonTheme: ElevatedButtonThemeData(
-    style: ElevatedButton.styleFrom(
-      backgroundColor: AppColors.secondaryBlue,
-      foregroundColor: AppColors.textLight,
-      padding: EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ),
-  ),
-  outlinedButtonTheme: OutlinedButtonThemeData(
-    style: OutlinedButton.styleFrom(
-      foregroundColor: AppColors.secondaryBlue,
-      side: BorderSide(color: AppColors.secondaryBlue),
-      padding: EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ),
-  ),
-  textButtonTheme: TextButtonThemeData(
-    style: TextButton.styleFrom(
-      foregroundColor: AppColors.secondaryBlue,
-      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-    ),
-  ),
-  inputDecorationTheme: InputDecorationTheme(
-    filled: true,
-    fillColor: Colors.white,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: AppColors.secondaryBlue.withOpacity(0.5)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: AppColors.secondaryBlue, width: 2),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: AppColors.secondaryBlue.withOpacity(0.3)),
-    ),
-    contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-  ),
-  colorScheme: ColorScheme.light(
-    primary: AppColors.primaryGreen,
-    secondary: AppColors.secondaryBlue,
-    error: AppColors.accentMaroon,
-  ),
-);
 
 class CourseManagementScreen extends StatefulWidget {
   @override
@@ -101,13 +21,13 @@ class _CourseManagementScreenState extends State<CourseManagementScreen> with Si
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _isRefreshing = false;
 
   @override
   void initState() {
     super.initState();
     final courseProvider = Provider.of<CourseProvider>(context, listen: false);
     courseProvider.fetchCourses(); // Fetch courses on initialization
-    // Update TabController length to 3.
     _tabController = TabController(length: 3, vsync: this);
     _searchController.addListener(() {
       setState(() {
@@ -123,47 +43,49 @@ class _CourseManagementScreenState extends State<CourseManagementScreen> with Si
     super.dispose();
   }
 
+  // Function to refresh courses
+  Future<void> _refreshCourses() async {
+    setState(() {
+      _isRefreshing = true;
+    });
+
+    final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+    await courseProvider.fetchCourses();
+
+    setState(() {
+      _isRefreshing = false;
+    });
+
+    showCMSToast(
+      context,
+      message: 'Courses refreshed successfully',
+      icon: Icons.check_circle_outline_rounded,
+    );
+  }
+
   // Function to show delete confirmation dialog
   Future<void> _confirmDelete(BuildContext context, String courseId, String courseTitle) async {
-    final courseProvider = Provider.of<CourseProvider>(context, listen: false);
-    return showDialog<void>(
+    showDialog(
       context: context,
-      barrierDismissible: false, // User must tap button
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Delete Course'),
-          content: Text('Are you sure you want to delete "$courseTitle"? This action cannot be undone.'),
-          actions: <Widget>[
-            TextButton(
-              child: Text('Cancel'),
-              onPressed: () {
-                Navigator.of(context).pop(); // Dismiss dialog
-              },
-            ),
-            TextButton(
-              child: Text(
-                  'Delete',
-                  style: TextStyle(color: AppColors.accentMaroon)
-              ),
-              onPressed: () async {
-                Navigator.of(context).pop(); // Dismiss dialog
-                await courseProvider.deleteCourse(courseId);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Course "$courseTitle" deleted successfully.'),
-                    backgroundColor: AppColors.accentMaroon,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                );
-              },
-            ),
-          ],
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          backgroundColor: Colors.white,
-          elevation: 5,
-        );
-      },
+      builder: (context) => CMSConfirmationDialog(
+        title: 'Delete Course',
+        message: 'Are you sure you want to delete "$courseTitle"? This action cannot be undone.',
+        confirmText: 'Delete',
+        confirmColor: CMSDesignSystem.accentMaroon,
+        icon: Icons.delete_forever_rounded,
+        onCancel: () => Navigator.of(context).pop(),
+        onConfirm: () async {
+          Navigator.of(context).pop();
+          final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+          await courseProvider.deleteCourse(courseId);
+          showCMSToast(
+            context,
+            message: 'Course "$courseTitle" deleted successfully.',
+            backgroundColor: CMSDesignSystem.accentMaroon,
+            icon: Icons.delete_rounded,
+          );
+        },
+      ),
     );
   }
 
@@ -173,7 +95,12 @@ class _CourseManagementScreenState extends State<CourseManagementScreen> with Si
     return courses.where((course) {
       final title = (course.data() as Map<String, dynamic>)['courseTitle']?.toString().toLowerCase() ?? '';
       final description = (course.data() as Map<String, dynamic>)['description']?.toString().toLowerCase() ?? '';
-      return title.contains(_searchQuery) || description.contains(_searchQuery);
+      final instructor = (course.data() as Map<String, dynamic>)['instructor']?.toString().toLowerCase() ?? '';
+      final subject = (course.data() as Map<String, dynamic>)['subject']?.toString().toLowerCase() ?? '';
+      return title.contains(_searchQuery) ||
+          description.contains(_searchQuery) ||
+          instructor.contains(_searchQuery) ||
+          subject.contains(_searchQuery);
     }).toList();
   }
 
@@ -182,183 +109,180 @@ class _CourseManagementScreenState extends State<CourseManagementScreen> with Si
     final courseProvider = Provider.of<CourseProvider>(context);
 
     return Theme(
-      data: appTheme,
+      data: CMSTheme.lightTheme,
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'Course Management',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          bottom: TabBar(
-            controller: _tabController,
-            tabs: [
-              Tab(text: 'Free Courses'),
-              Tab(text: 'Premium Courses'),
-              Tab(text: 'Review Courses'),
-            ],
-            indicator: BoxDecoration(
-              color: AppColors.secondaryBlue,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(10),
-                topRight: Radius.circular(10),
-              ),
-            ),
-            labelStyle: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-            unselectedLabelStyle: TextStyle(
-              fontWeight: FontWeight.normal,
-              fontSize: 14,
-            ),
-            padding: EdgeInsets.symmetric(horizontal: 8),
-          ),
-          actions: [
-            IconButton(
-              icon: Icon(Icons.refresh),
-              tooltip: 'Refresh Courses',
-              onPressed: () {
-                // Reload courses
-                courseProvider.fetchCourses();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Refreshing course list...'),
-                    backgroundColor: AppColors.secondaryBlue,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        body: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              SliverAppBar(
+                expandedHeight: 120.0,
+                floating: true,
+                pinned: true,
+                snap: false,
+                title: Text(
+                  'Course Management',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
                   ),
-                );
-              },
-            ),
-          ],
-        ),
-        body: courseProvider.isLoading
-            ? Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(AppColors.secondaryBlue),
-          ),
-        )
-            : courseProvider.hasError
-            ? Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 48,
-                color: AppColors.accentMaroon,
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Error loading courses',
-                style: TextStyle(
-                  color: AppColors.textDark,
-                  fontSize: 18,
                 ),
-              ),
-              SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => courseProvider.fetchCourses(),
-                child: Text('Try Again'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.secondaryBlue,
-                ),
-              ),
-            ],
-          ),
-        )
-            : Column(
-          children: [
-            // Search Bar
-            Container(
-              margin: const EdgeInsets.all(16.0),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(25.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search courses...',
-                  prefixIcon: Icon(
-                    Icons.search,
-                    color: AppColors.secondaryBlue,
-                  ),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                    icon: Icon(
-                      Icons.clear,
-                      color: AppColors.secondaryBlue,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          CMSDesignSystem.primaryGreen,
+                          CMSDesignSystem.lightGreen,
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
                     ),
-                    onPressed: () {
-                      _searchController.clear();
-                    },
-                  )
-                      : null,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(25.0),
-                    borderSide: BorderSide.none,
+                    child: Opacity(
+                      opacity: 0.1,
+                      child: Image.network(
+                        'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                   ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 20),
                 ),
-              ),
-            ),
-            // Expanded TabBarView
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  // Free Courses Tab
-                  _buildCourseList(
-                    context,
-                    courseProvider.getFreeCourses(),
-                    'Free Courses',
+                actions: [
+                  IconButton(
+                    icon: Icon(Icons.refresh_rounded),
+                    tooltip: 'Refresh Courses',
+                    onPressed: _isRefreshing ? null : _refreshCourses,
                   ),
-                  // Premium Courses Tab
-                  _buildCourseList(
-                    context,
-                    courseProvider.getPremiumCourses(),
-                    'Premium Courses',
-                  ),
-                  // Review Courses Tab (courses not approved)
-                  _buildCourseList(
-                    context,
-                    courseProvider.getReviewCourses(),
-                    'Review Courses',
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert_rounded),
+                    onSelected: (value) {
+                      if (value == 'export') {
+                        showCMSToast(
+                          context,
+                          message: 'Export feature will be available soon',
+                          icon: Icons.info_outline_rounded,
+                        );
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'export',
+                        child: Row(
+                          children: [
+                            Icon(Icons.download_rounded, color: CMSDesignSystem.primaryBlue, size: 20),
+                            SizedBox(width: 12),
+                            Text('Export Data'),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
+                bottom: TabBar(
+                  controller: _tabController,
+                  tabs: [
+                    Tab(text: 'Free Courses'),
+                    Tab(text: 'Premium Courses'),
+                    Tab(text: 'Review Courses'),
+                  ],
+                  indicator: CMSTabIndicator(
+                    color: Colors.white,
+                    radius: 4,
+                    height: 4,
+                  ),
+                  labelStyle: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                  unselectedLabelStyle: TextStyle(
+                    fontWeight: FontWeight.normal,
+                    fontSize: 14,
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                ),
               ),
-            ),
-          ],
+            ];
+          },
+          body: courseProvider.isLoading
+              ? CMSLoadingState(message: 'Loading courses...')
+              : courseProvider.hasError
+              ? CMSErrorState(
+            message: 'Error loading courses. Please try again.',
+            onRetry: () => courseProvider.fetchCourses(),
+          )
+              : Column(
+            children: [
+              // Search Bar
+              CMSSearchBar(
+                controller: _searchController,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.toLowerCase();
+                  });
+                },
+                onClear: () {
+                  setState(() {
+                    _searchQuery = '';
+                  });
+                },
+                hintText: 'Search courses by title, description or instructor',
+              ),
+              // Expanded TabBarView
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    // Free Courses Tab
+                    _buildCourseList(
+                      context,
+                      courseProvider.getFreeCourses(),
+                      'Free Courses',
+                      CMSDesignSystem.freeCourseColor,
+                    ),
+                    // Premium Courses Tab
+                    _buildCourseList(
+                      context,
+                      courseProvider.getPremiumCourses(),
+                      'Premium Courses',
+                      CMSDesignSystem.premiumCourseColor,
+                    ),
+                    // Review Courses Tab (courses not approved)
+                    _buildCourseList(
+                      context,
+                      courseProvider.getReviewCourses(),
+                      'Review Courses',
+                      CMSDesignSystem.pendingCourseColor,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         floatingActionButton: SpeedDial(
           animatedIcon: AnimatedIcons.menu_close,
-          backgroundColor: AppColors.secondaryBlue,
+          backgroundColor: CMSDesignSystem.primaryBlue,
           foregroundColor: Colors.white,
           overlayColor: Colors.black,
           overlayOpacity: 0.4,
           spacing: 12,
           spaceBetweenChildren: 12,
+          renderOverlay: true,
+          tooltip: 'Course Actions',
+          heroTag: 'course-speed-dial',
+          elevation: 8.0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16.0),
+          ),
           children: [
             SpeedDialChild(
-              child: Icon(Icons.add, color: Colors.white),
+              child: Icon(Icons.add_rounded, color: Colors.white),
+              backgroundColor: CMSDesignSystem.primaryGreen,
               label: 'Add Course',
               labelStyle: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark
+                fontWeight: FontWeight.bold,
+                color: CMSDesignSystem.textPrimary,
               ),
-              backgroundColor: AppColors.primaryGreen,
               onTap: () {
                 Navigator.push(
                   context,
@@ -367,24 +291,14 @@ class _CourseManagementScreenState extends State<CourseManagementScreen> with Si
               },
             ),
             SpeedDialChild(
-              child: Icon(Icons.refresh, color: Colors.white),
+              child: Icon(Icons.refresh_rounded, color: Colors.white),
+              backgroundColor: CMSDesignSystem.lightBlue,
               label: 'Refresh',
               labelStyle: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark
+                fontWeight: FontWeight.bold,
+                color: CMSDesignSystem.textPrimary,
               ),
-              backgroundColor: AppColors.lightBlue,
-              onTap: () {
-                courseProvider.fetchCourses();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Refreshing course list...'),
-                    backgroundColor: AppColors.secondaryBlue,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                );
-              },
+              onTap: _refreshCourses,
             ),
           ],
         ),
@@ -393,349 +307,102 @@ class _CourseManagementScreenState extends State<CourseManagementScreen> with Si
   }
 
   // Widget to build the course list
-  Widget _buildCourseList(BuildContext context, Future<List<QueryDocumentSnapshot<Object?>>?> futureCourses, String courseType) {
+  Widget _buildCourseList(
+      BuildContext context,
+      Future<List<QueryDocumentSnapshot<Object?>>?> futureCourses,
+      String courseType,
+      Color statusColor,
+      ) {
     return FutureBuilder<List<QueryDocumentSnapshot<Object?>>?>(
       future: futureCourses,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.secondaryBlue),
-            ),
-          );
+          return CMSLoadingState(message: 'Loading $courseType...');
         }
         if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.error_outline,
-                  size: 48,
-                  color: AppColors.accentMaroon,
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'Error fetching $courseType',
-                  style: TextStyle(
-                    color: AppColors.textDark,
-                    fontSize: 18,
-                  ),
-                ),
-                SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    final courseProvider = Provider.of<CourseProvider>(context, listen: false);
-                    courseProvider.fetchCourses();
-                  },
-                  child: Text('Try Again'),
-                ),
-              ],
-            ),
+          return CMSErrorState(
+            message: 'Error fetching $courseType. Please try again.',
+            onRetry: () {
+              final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+              courseProvider.fetchCourses();
+            },
           );
         }
 
         final courses = _filterCourses(snapshot.data ?? []);
 
         if (courses.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  _searchQuery.isNotEmpty ? Icons.search_off : Icons.school_outlined,
-                  size: 64,
-                  color: AppColors.secondaryBlue.withOpacity(0.5),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  _searchQuery.isNotEmpty
-                      ? 'No results found for "$_searchQuery"'
-                      : 'No $courseType available',
-                  style: TextStyle(
-                    color: AppColors.textDark,
-                    fontSize: 18,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                if (_searchQuery.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 16.0),
-                    child: TextButton.icon(
-                      icon: Icon(Icons.clear),
-                      label: Text('Clear Search'),
-                      onPressed: () {
-                        _searchController.clear();
-                      },
-                    ),
-                  ),
-              ],
+          return CMSEmptyState(
+            icon: _searchQuery.isNotEmpty ? Icons.search_off_rounded : Icons.school_rounded,
+            title: _searchQuery.isNotEmpty
+                ? 'No results found'
+                : 'No $courseType available',
+            message: _searchQuery.isNotEmpty
+                ? 'No courses match your search for "$_searchQuery"'
+                : 'Courses you add will appear here',
+            actionButton: _searchQuery.isNotEmpty
+                ? TextButton.icon(
+              icon: Icon(Icons.clear_rounded),
+              label: Text('Clear Search'),
+              onPressed: () {
+                _searchController.clear();
+              },
+            )
+                : ElevatedButton.icon(
+              icon: Icon(Icons.add_rounded),
+              label: Text('Add Your First Course'),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => AddCourseScreen()),
+                );
+              },
             ),
           );
         }
 
         return RefreshIndicator(
-          onRefresh: () async {
-            final courseProvider = Provider.of<CourseProvider>(context, listen: false);
-            await courseProvider.fetchCourses();
-          },
-          color: AppColors.secondaryBlue,
+          onRefresh: _refreshCourses,
+          color: statusColor,
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding: EdgeInsets.only(bottom: 80.0), // Add padding for the FloatingActionButton
             itemCount: courses.length,
             itemBuilder: (context, index) {
               final courseData = courses[index].data() as Map<String, dynamic>;
               final course = Course.fromMap(courseData, courses[index].id);
 
-              // Apply search filter
-              if (_searchQuery.isNotEmpty) {
-                final title = course.courseTitle?.toLowerCase() ?? '';
-                final description = course.description?.toLowerCase() ?? '';
-                if (!title.contains(_searchQuery) && !description.contains(_searchQuery)) {
-                  return SizedBox.shrink(); // Skip this item
-                }
-              }
-
-              // Determine course status color
-              Color statusColor;
-              if (courseType == 'Free Courses') {
-                statusColor = AppColors.primaryGreen;
-              } else if (courseType == 'Premium Courses') {
-                statusColor = AppColors.secondaryBlue;
-              } else {
-                statusColor = AppColors.accentMaroon;
-              }
-
-              return Card(
-                margin: const EdgeInsets.symmetric(vertical: 8.0),
-                elevation: 2.0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15.0),
-                  side: BorderSide(
-                    color: statusColor.withOpacity(0.3),
-                    width: 1,
-                  ),
-                ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(15.0),
-                  onTap: () {
-                    // Navigate to Course Detail Screen
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CourseDetailScreen(course: course),
-                      ),
-                    );
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: statusColor,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(15.0),
-                            topRight: Radius.circular(15.0),
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Course Image
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12.0),
-                              child: course.imageUrl != null && course.imageUrl!.isNotEmpty
-                                  ? Image.network(
-                                course.imageUrl!,
-                                width: 100,
-                                height: 100,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  width: 100,
-                                  height: 100,
-                                  color: AppColors.lightBlue.withOpacity(0.1),
-                                  child: Icon(
-                                    Icons.broken_image,
-                                    size: 40,
-                                    color: AppColors.secondaryBlue,
-                                  ),
-                                ),
-                              )
-                                  : Container(
-                                width: 100,
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  color: AppColors.secondaryBlue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12.0),
-                                ),
-                                child: Icon(
-                                  Icons.school,
-                                  size: 40,
-                                  color: AppColors.secondaryBlue,
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 16),
-                            // Course Information
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: statusColor.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          course.status?.capitalize() ?? 'N/A',
-                                          style: TextStyle(
-                                            color: statusColor,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                      if (course.medium != null)
-                                        Container(
-                                          margin: EdgeInsets.only(left: 8),
-                                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.secondaryBlue.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            course.medium!,
-                                            style: TextStyle(
-                                              color: AppColors.secondaryBlue,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    course.courseTitle ?? 'No Title',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.textDark,
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  if (course.instructor != null && course.instructor!.isNotEmpty)
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.person,
-                                          size: 16,
-                                          color: AppColors.secondaryBlue,
-                                        ),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          course.instructor!,
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: AppColors.secondaryBlue,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    course.description ?? 'No Description',
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey[700],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Action buttons
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            // Price or Free badge
-                            Row(
-                              children: [
-                                Icon(
-                                  course.price != null && course.price! > 0
-                                      ? Icons.attach_money
-                                      : Icons.money_off,
-                                  size: 16,
-                                  color: course.price != null && course.price! > 0
-                                      ? AppColors.secondaryBlue
-                                      : AppColors.primaryGreen,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  course.price != null && course.price! > 0
-                                      ? '${course.price}'
-                                      : 'Free',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: course.price != null && course.price! > 0
-                                        ? AppColors.secondaryBlue
-                                        : AppColors.primaryGreen,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            // Action buttons
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.edit,
-                                    color: AppColors.secondaryBlue,
-                                  ),
-                                  tooltip: 'Edit Course',
-                                  onPressed: () {
-                                    // Navigate to Edit Course screen
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => EditCourseScreen(course: course),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.delete,
-                                    color: AppColors.accentMaroon,
-                                  ),
-                                  tooltip: 'Delete Course',
-                                  onPressed: () {
-                                    // Show delete confirmation dialog
-                                    _confirmDelete(context, course.id!, course.courseTitle ?? 'No Title');
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              return CMSCourseCard(
+                id: course.id ?? '',
+                title: course.courseTitle ?? 'No Title',
+                imageUrl: course.imageUrl,
+                instructor: course.instructor,
+                description: course.description,
+                status: course.status,
+                medium: course.medium,
+                price: course.price,
+                isApproved: course.isApproved ?? true,
+                onTap: () {
+                  // Navigate to Course Detail Screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CourseDetailScreen(course: course),
+                    ),
+                  );
+                },
+                onEdit: () {
+                  // Navigate to Edit Course screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EditCourseScreen(course: course),
+                    ),
+                  );
+                },
+                onDelete: () {
+                  // Show delete confirmation dialog
+                  _confirmDelete(context, course.id!, course.courseTitle ?? 'No Title');
+                },
               );
             },
           ),
@@ -767,6 +434,7 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
   String? selectedStatus;
   File? selectedImage;
   bool isLoading = false;
+  final _formKey = GlobalKey<FormState>();
 
   final List<String> statuses = ['free', 'Premium'];
 
@@ -775,7 +443,7 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
     super.initState();
     titleController = TextEditingController(text: widget.course.courseTitle);
     descriptionController = TextEditingController(text: widget.course.description);
-    priceController = TextEditingController(text: widget.course.price?.toString());
+    priceController = TextEditingController(text: widget.course.price?.toString() ?? '0');
     subjectController = TextEditingController(text: widget.course.subject ?? '');
     instructorController = TextEditingController(text: widget.course.instructor ?? '');
     durationController = TextEditingController(text: widget.course.duration ?? '');
@@ -802,426 +470,402 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
     final courseProvider = Provider.of<CourseProvider>(context, listen: false);
 
     return Theme(
-      data: appTheme,
+      data: CMSTheme.lightTheme,
       child: Scaffold(
-      appBar: AppBar(
-      title: Text(
-      'Edit Course',
-      style: TextStyle(
-        fontSize: 20,
-        fontWeight: FontWeight.bold,
-      ),
-    ),
-    elevation: 0,
-    ),
-    body: Stack(
-    children: [
-    Container(
-    height: 120,
-    color: AppColors.primaryGreen,
-    ),
-    Container(
-    margin: EdgeInsets.only(top: 30),
-    decoration: BoxDecoration(
-    color: AppColors.backgroundLight,
-    borderRadius: BorderRadius.only(
-    topLeft: Radius.circular(30),
-    topRight: Radius.circular(30),
-    ),
-    ),
-    child: SingleChildScrollView(
-    padding: const EdgeInsets.all(24.0),
-    child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-    Center(
-    child: GestureDetector(
-    onTap: _pickImage,
-    child: Stack(
-    children: [
-    Container(
-    width: 120,
-    height: 120,
-    decoration: BoxDecoration(
-    color: AppColors.secondaryBlue.withOpacity(0.1),
-    borderRadius: BorderRadius.circular(15.0),
-    border: Border.all(
-    color: AppColors.secondaryBlue.withOpacity(0.3),
-    width: 2,
-    ),
-    ),
-    child: ClipRRect(
-    borderRadius: BorderRadius.circular(13.0),
-    child: selectedImage != null
-    ? Image.file(
-    selectedImage!,
-    fit: BoxFit.cover,
-    )
-        : widget.course.imageUrl != null && widget.course.imageUrl!.isNotEmpty
-    ? Image.network(
-    widget.course.imageUrl!,
-    fit: BoxFit.cover,
-    errorBuilder: (context, error, stackTrace) => Icon(
-    Icons.image,
-    size: 60,
-    color: AppColors.secondaryBlue,
-    ),
-    )
-        : Icon(
-    Icons.image,
-    size: 60,
-    color: AppColors.secondaryBlue,
-    ),
-    ),
-    ),
-      Positioned(
-        right: 0,
-        bottom: 0,
-        child: Container(
-          padding: EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppColors.secondaryBlue,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: Colors.white,
-              width: 2,
-            ),
-          ),
-          child: Icon(
-            Icons.camera_alt,
-            color: Colors.white,
-            size: 18,
-          ),
-        ),
-      ),
-    ],
-    ),
-    ),
-    ),
-      SizedBox(height: 32),
-      Text(
-        'Course Information',
-        style: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          color: AppColors.primaryGreen,
-        ),
-      ),
-      SizedBox(height: 16),
-
-      // Title Field
-      _buildInputField(
-        controller: titleController,
-        label: 'Course Title',
-        hintText: 'Enter course title',
-        icon: Icons.title,
-      ),
-      SizedBox(height: 16),
-
-      // Instructor Field
-      _buildInputField(
-        controller: instructorController,
-        label: 'Instructor',
-        hintText: 'Enter instructor name',
-        icon: Icons.person,
-      ),
-      SizedBox(height: 16),
-
-      // Medium Dropdown
-      Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 5,
-              offset: Offset(0, 2),
+        appBar: CMSAppBar(
+          title: 'Edit Course',
+          actions: [
+            IconButton(
+              icon: Icon(Icons.save_rounded),
+              tooltip: 'Save Changes',
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                if (_formKey.currentState!.validate()) {
+                  _saveChanges(courseProvider);
+                }
+              },
             ),
           ],
         ),
-        child: DropdownButtonFormField<String>(
-          value: selectedMedium,
-          decoration: InputDecoration(
-            labelText: 'Medium',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            prefixIcon: Icon(
-              Icons.language,
-              color: AppColors.secondaryBlue,
-            ),
-          ),
-          items: mediums.map((medium) {
-            return DropdownMenuItem(
-              value: medium,
-              child: Text(medium),
-            );
-          }).toList(),
-          onChanged: (value) {
-            setState(() {
-              selectedMedium = value;
-            });
-          },
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please select a medium';
-            }
-            return null;
-          },
-          dropdownColor: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-        ),
-      ),
-      SizedBox(height: 16),
-
-      // Description Field
-      _buildInputField(
-        controller: descriptionController,
-        label: 'Course Description',
-        hintText: 'Enter course description',
-        icon: Icons.description,
-        maxLines: 3,
-      ),
-      SizedBox(height: 16),
-
-      // Duration Field
-      _buildInputField(
-        controller: durationController,
-        label: 'Course Duration',
-        hintText: 'Enter course duration (e.g., 4 weeks)',
-        icon: Icons.timer,
-      ),
-      SizedBox(height: 16),
-
-      // Price Field
-      _buildInputField(
-        controller: priceController,
-        label: 'Price',
-        hintText: 'Enter price (e.g., 20.99)',
-        icon: Icons.attach_money,
-        keyboardType: TextInputType.number,
-      ),
-      SizedBox(height: 16),
-
-      // Status Dropdown
-      Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 5,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: DropdownButtonFormField<String>(
-          value: selectedStatus,
-          items: statuses
-              .map(
-                (status) => DropdownMenuItem(
-              value: status,
-              child: Text(
-                status[0].toUpperCase() + status.substring(1),
-              ),
-            ),
-          )
-              .toList(),
-          onChanged: (value) => setState(() {
-            selectedStatus = value;
-          }),
-          decoration: InputDecoration(
-            labelText: 'Status',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            prefixIcon: Icon(
-              Icons.bookmark,
-              color: AppColors.secondaryBlue,
-            ),
-          ),
-          dropdownColor: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-        ),
-      ),
-      SizedBox(height: 16),
-
-      // Subject Field
-      _buildInputField(
-        controller: subjectController,
-        label: 'Subject',
-        hintText: 'Enter subject name',
-        icon: Icons.book,
-      ),
-      SizedBox(height: 32),
-
-      // Save Button
-      Container(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          icon: Icon(Icons.save),
-          label: Text('Save Changes'),
-          onPressed: isLoading
-              ? null
-              : () async {
-            if (titleController.text.isEmpty ||
-                descriptionController.text.isEmpty ||
-                subjectController.text.isEmpty ||
-                selectedStatus == null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Please fill in all required fields'),
-                  backgroundColor: AppColors.accentMaroon,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              );
-              return;
-            }
-
-            setState(() => isLoading = true);
-
-            // Handle image upload
-            String? imageUrl = widget.course.imageUrl;
-            if (selectedImage != null) {
-              imageUrl = await courseProvider.uploadImage(selectedImage!);
-            }
-
-            // Update course fields
-            widget.course.courseTitle = titleController.text;
-            widget.course.description = descriptionController.text;
-            widget.course.price = double.tryParse(priceController.text);
-            widget.course.status = selectedStatus;
-            widget.course.subject = subjectController.text;
-            widget.course.imageUrl = imageUrl;
-            widget.course.instructor = instructorController.text;
-            widget.course.duration = durationController.text;
-            widget.course.medium = selectedMedium;
-
-            await courseProvider.updateCourse(widget.course);
-
-            setState(() => isLoading = false);
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Course updated successfully'),
-                backgroundColor: AppColors.primaryGreen,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            );
-
-            Navigator.pop(context);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.secondaryBlue,
-            foregroundColor: Colors.white,
-            padding: EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        ),
-      ),
-      SizedBox(height: 16),
-
-      // Cancel Button
-      Container(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          icon: Icon(Icons.cancel),
-          label: Text('Cancel'),
-          onPressed: () {
-            Navigator.pop(context);
-          },
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.accentMaroon,
-            side: BorderSide(color: AppColors.accentMaroon),
-            padding: EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        ),
-      ),
-      SizedBox(height: 32),
-    ],
-    ),
-    ),
-    ),
-
-      // Full-Screen Loading Indicator
-      if (isLoading)
-        Container(
-          color: Colors.black.withOpacity(0.5),
-          child: Center(
-            child: Container(
-              padding: EdgeInsets.all(20),
+        body: Stack(
+          children: [
+            Container(
+              height: 100,
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(15),
+                gradient: LinearGradient(
+                  colors: [
+                    CMSDesignSystem.primaryGreen,
+                    CMSDesignSystem.lightGreen,
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.secondaryBlue),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Saving changes...',
-                    style: TextStyle(
-                      color: AppColors.secondaryBlue,
-                      fontWeight: FontWeight.bold,
-                    ),
+            ),
+            Container(
+              margin: EdgeInsets.only(top: 20),
+              decoration: BoxDecoration(
+                color: CMSDesignSystem.background,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(30),
+                  topRight: Radius.circular(30),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: Offset(0, -2),
                   ),
                 ],
               ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: GestureDetector(
+                          onTap: _pickImage,
+                          child: Stack(
+                            children: [
+                              Container(
+                                width: 120,
+                                height: 120,
+                                decoration: BoxDecoration(
+                                  color: CMSDesignSystem.primaryBlue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(15.0),
+                                  border: Border.all(
+                                    color: CMSDesignSystem.primaryBlue.withOpacity(0.3),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(13.0),
+                                  child: selectedImage != null
+                                      ? Image.file(
+                                    selectedImage!,
+                                    fit: BoxFit.cover,
+                                  )
+                                      : widget.course.imageUrl != null && widget.course.imageUrl!.isNotEmpty
+                                      ? Image.network(
+                                    widget.course.imageUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => Icon(
+                                      Icons.image_rounded,
+                                      size: 50,
+                                      color: CMSDesignSystem.primaryBlue,
+                                    ),
+                                  )
+                                      : Icon(
+                                    Icons.image_rounded,
+                                    size: 50,
+                                    color: CMSDesignSystem.primaryBlue,
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  padding: EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: CMSDesignSystem.primaryBlue,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    Icons.camera_alt_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 32),
+                      Text(
+                        'Course Information',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: CMSDesignSystem.primaryGreen,
+                        ),
+                      ),
+                      SizedBox(height: 16),
+
+                      // Course Title
+                      CMSFormField(
+                        controller: titleController,
+                        label: 'Course Title',
+                        hintText: 'Enter course title',
+                        prefixIcon: Icons.title_rounded,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter a course title';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Instructor
+                      CMSFormField(
+                        controller: instructorController,
+                        label: 'Instructor',
+                        hintText: 'Enter instructor name',
+                        prefixIcon: Icons.person_rounded,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter an instructor name';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Medium Dropdown
+                      CMSDropdownField<String>(
+                        label: 'Medium',
+                        value: selectedMedium,
+                        items: mediums.map((medium) {
+                          return DropdownMenuItem(
+                            value: medium,
+                            child: Text(medium),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            selectedMedium = value;
+                          });
+                        },
+                        prefixIcon: Icons.language_rounded,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please select a medium';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Description
+                      CMSFormField(
+                        controller: descriptionController,
+                        label: 'Course Description',
+                        hintText: 'Enter course description',
+                        prefixIcon: Icons.description_rounded,
+                        maxLines: 3,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter a course description';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Duration
+                      CMSFormField(
+                        controller: durationController,
+                        label: 'Course Duration',
+                        hintText: 'Enter course duration (e.g., 4 weeks)',
+                        prefixIcon: Icons.timer_rounded,
+                      ),
+
+                      // Price
+                      CMSFormField(
+                        controller: priceController,
+                        label: 'Price',
+                        hintText: 'Enter price (e.g., 20.99)',
+                        prefixIcon: Icons.attach_money_rounded,
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter a price (0 for free courses)';
+                          }
+                          if (double.tryParse(value) == null) {
+                            return 'Please enter a valid number';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Status Dropdown
+                      CMSDropdownField<String>(
+                        label: 'Status',
+                        value: selectedStatus,
+                        items: statuses.map((status) {
+                          return DropdownMenuItem(
+                            value: status,
+                            child: Text(
+                              status[0].toUpperCase() + status.substring(1),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            selectedStatus = value;
+                          });
+                        },
+                        prefixIcon: Icons.bookmark_rounded,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please select a status';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Subject
+                      CMSFormField(
+                        controller: subjectController,
+                        label: 'Subject',
+                        hintText: 'Enter subject name',
+                        prefixIcon: Icons.book_rounded,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter a subject';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      SizedBox(height: 32),
+
+                      // Save Button
+                      CMSButton(
+                        text: 'Save Changes',
+                        icon: Icons.save_rounded,
+                        onPressed: isLoading
+                            ? () {}
+                            : () {
+                          if (_formKey.currentState!.validate()) {
+                            _saveChanges(courseProvider);
+                          }
+                        },
+                        isLoading: isLoading,
+                      ),
+
+                      SizedBox(height: 16),
+
+                      // Cancel Button
+                      CMSButton(
+                        text: 'Cancel',
+                        icon: Icons.cancel_rounded,
+                        isOutlined: true,
+                        color: CMSDesignSystem.accentMaroon,
+                        textColor: CMSDesignSystem.accentMaroon,
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                      ),
+                      SizedBox(height: 32),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ),
+
+            // Full-Screen Loading Indicator (shown when isLoading is true)
+            if (isLoading)
+              Container(
+                color: Colors.black.withOpacity(0.5),
+                child: Center(
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 24,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(CMSDesignSystem.primaryBlue),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Saving changes...',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
-    ],
-    ),
       ),
     );
   }
 
-  Widget _buildInputField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    String? hintText,
-    TextInputType? keyboardType,
-    int maxLines = 1,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 5,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-        maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hintText,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          prefixIcon: Icon(
-            icon,
-            color: AppColors.secondaryBlue,
-          ),
-        ),
-      ),
-    );
+  Future<void> _saveChanges(CourseProvider courseProvider) async {
+    setState(() => isLoading = true);
+
+    try {
+      // Handle image upload
+      String? imageUrl = widget.course.imageUrl;
+      if (selectedImage != null) {
+        imageUrl = await courseProvider.uploadImage(selectedImage!);
+      }
+
+      // Update course fields
+      widget.course.courseTitle = titleController.text;
+      widget.course.description = descriptionController.text;
+      widget.course.price = double.tryParse(priceController.text);
+      widget.course.status = selectedStatus;
+      widget.course.subject = subjectController.text;
+      widget.course.imageUrl = imageUrl;
+      widget.course.instructor = instructorController.text;
+      widget.course.duration = durationController.text;
+      widget.course.medium = selectedMedium;
+
+      await courseProvider.updateCourse(widget.course);
+
+      setState(() => isLoading = false);
+
+      showCMSToast(
+        context,
+        message: 'Course updated successfully',
+        backgroundColor: CMSDesignSystem.primaryGreen,
+        icon: Icons.check_circle_outline_rounded,
+      );
+
+      Navigator.pop(context);
+    } catch (e) {
+      setState(() => isLoading = false);
+
+      showCMSToast(
+        context,
+        message: 'Error updating course: ${e.toString()}',
+        backgroundColor: CMSDesignSystem.error,
+        icon: Icons.error_outline_rounded,
+      );
+    }
   }
 }
 
@@ -1233,16 +877,23 @@ class AddCourseScreen extends StatefulWidget {
 class _AddCourseScreenState extends State<AddCourseScreen> {
   final TextEditingController titleController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
-  final TextEditingController priceController = TextEditingController();
+  final TextEditingController priceController = TextEditingController(text: '0');
   final TextEditingController subjectController = TextEditingController();
-  final TextEditingController instructorController= TextEditingController();
-  final TextEditingController durationController= TextEditingController();
+  final TextEditingController instructorController = TextEditingController();
+  final TextEditingController durationController = TextEditingController();
   String? selectedMedium;
   final List<String> mediums = ['Tamil', 'English', 'Sinhala'];
 
   String? selectedStatus = 'free';
   File? selectedImage;
   bool isLoading = false;
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    selectedMedium = mediums.first;
+  }
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -1259,156 +910,168 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     final courseProvider = Provider.of<CourseProvider>(context, listen: false);
 
     return Theme(
-      data: appTheme,
+      data: CMSTheme.lightTheme,
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'Add New Course',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+        appBar: CMSAppBar(
+          title: 'Add New Course',
+          actions: [
+            IconButton(
+              icon: Icon(Icons.save_rounded),
+              tooltip: 'Save Course',
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                if (_formKey.currentState!.validate()) {
+                  _createCourse(courseProvider);
+                }
+              },
             ),
-          ),
-          elevation: 0,
+          ],
         ),
         body: Stack(
           children: [
             Container(
-              height: 120,
-              color: AppColors.primaryGreen,
+              height: 100,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    CMSDesignSystem.primaryGreen,
+                    CMSDesignSystem.lightGreen,
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
             ),
             Container(
-              margin: EdgeInsets.only(top: 30),
+              margin: EdgeInsets.only(top: 20),
               decoration: BoxDecoration(
-                color: AppColors.backgroundLight,
+                color: CMSDesignSystem.background,
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(30),
                   topRight: Radius.circular(30),
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: Offset(0, -2),
+                  ),
+                ],
               ),
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: GestureDetector(
-                        onTap: _pickImage,
-                        child: Stack(
-                          children: [
-                            Container(
-                              width: 120,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                color: AppColors.secondaryBlue.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(15.0),
-                                border: Border.all(
-                                  color: AppColors.secondaryBlue.withOpacity(0.3),
-                                  width: 2,
-                                ),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(13.0),
-                                child: selectedImage != null
-                                    ? Image.file(
-                                  selectedImage!,
-                                  fit: BoxFit.cover,
-                                )
-                                    : Icon(
-                                  Icons.image,
-                                  size: 60,
-                                  color: AppColors.secondaryBlue,
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: Container(
-                                padding: EdgeInsets.all(8),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: GestureDetector(
+                          onTap: _pickImage,
+                          child: Stack(
+                            children: [
+                              Container(
+                                width: 120,
+                                height: 120,
                                 decoration: BoxDecoration(
-                                  color: AppColors.secondaryBlue,
-                                  shape: BoxShape.circle,
+                                  color: CMSDesignSystem.primaryBlue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(15.0),
                                   border: Border.all(
-                                    color: Colors.white,
+                                    color: CMSDesignSystem.primaryBlue.withOpacity(0.3),
                                     width: 2,
                                   ),
                                 ),
-                                child: Icon(
-                                  Icons.camera_alt,
-                                  color: Colors.white,
-                                  size: 18,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(13.0),
+                                  child: selectedImage != null
+                                      ? Image.file(
+                                    selectedImage!,
+                                    fit: BoxFit.cover,
+                                  )
+                                      : Center(
+                                    child: Icon(
+                                      Icons.add_photo_alternate_rounded,
+                                      size: 50,
+                                      color: CMSDesignSystem.primaryBlue,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  padding: EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: CMSDesignSystem.primaryBlue,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    Icons.camera_alt_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    SizedBox(height: 32),
-                    Text(
-                      'New Course Information',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primaryGreen,
+                      SizedBox(height: 32),
+                      Text(
+                        'New Course Information',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: CMSDesignSystem.primaryGreen,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 16),
+                      SizedBox(height: 16),
 
-                    // Title Field
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 5,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
+                      // Course Title
+                      CMSFormField(
                         controller: titleController,
-                        decoration: InputDecoration(
-                          labelText: 'Course Title',
-                          hintText: 'Enter course title',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.title,
-                            color: AppColors.secondaryBlue,
-                          ),
-                        ),
+                        label: 'Course Title',
+                        hintText: 'Enter course title',
+                        prefixIcon: Icons.title_rounded,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter a course title';
+                          }
+                          return null;
+                        },
                       ),
-                    ),
-                    SizedBox(height: 16),
 
-                    // Medium Dropdown
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 5,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
+                      // Instructor
+                      CMSFormField(
+                        controller: instructorController,
+                        label: 'Instructor',
+                        hintText: 'Enter instructor name',
+                        prefixIcon: Icons.person_rounded,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter an instructor name';
+                          }
+                          return null;
+                        },
                       ),
-                      child: DropdownButtonFormField<String>(
+
+                      // Medium Dropdown
+                      CMSDropdownField<String>(
+                        label: 'Medium',
                         value: selectedMedium,
-                        decoration: InputDecoration(
-                          labelText: 'Course Medium',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.language,
-                            color: AppColors.secondaryBlue,
-                          ),
-                        ),
                         items: mediums.map((medium) {
                           return DropdownMenuItem(
                             value: medium,
@@ -1420,302 +1083,129 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                             selectedMedium = value;
                           });
                         },
+                        prefixIcon: Icons.language_rounded,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Please select a medium';
                           }
                           return null;
                         },
-                        dropdownColor: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
                       ),
-                    ),
-                    SizedBox(height: 16),
 
-                    // Description Field
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 5,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
+                      // Description
+                      CMSFormField(
                         controller: descriptionController,
-                        decoration: InputDecoration(
-                          labelText: 'Course Description',
-                          hintText: 'Enter course description',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.description,
-                            color: AppColors.secondaryBlue,
-                          ),
-                        ),
+                        label: 'Course Description',
+                        hintText: 'Enter course description',
+                        prefixIcon: Icons.description_rounded,
                         maxLines: 3,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter a course description';
+                          }
+                          return null;
+                        },
                       ),
-                    ),
-                    SizedBox(height: 16),
 
-                    // Duration Field
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 5,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
+                      // Duration
+                      CMSFormField(
                         controller: durationController,
-                        decoration: InputDecoration(
-                          labelText: 'Course Duration',
-                          hintText: 'Enter course duration (e.g., 4 weeks)',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.timer,
-                            color: AppColors.secondaryBlue,
-                          ),
-                        ),
+                        label: 'Course Duration',
+                        hintText: 'Enter course duration (e.g., 4 weeks)',
+                        prefixIcon: Icons.timer_rounded,
                       ),
-                    ),
-                    SizedBox(height: 16),
 
-                    // Price Field
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 5,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
+                      // Price
+                      CMSFormField(
                         controller: priceController,
+                        label: 'Price',
+                        hintText: 'Enter price (e.g., 20.99)',
+                        prefixIcon: Icons.attach_money_rounded,
                         keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'Price',
-                          hintText: 'Enter price (e.g., 20.99)',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.attach_money,
-                            color: AppColors.secondaryBlue,
-                          ),
-                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter a price (0 for free courses)';
+                          }
+                          if (double.tryParse(value) == null) {
+                            return 'Please enter a valid number';
+                          }
+                          return null;
+                        },
                       ),
-                    ),
-                    SizedBox(height: 16),
 
-                    // Status Dropdown
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 5,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: DropdownButtonFormField<String>(
+                      // Status Dropdown
+                      CMSDropdownField<String>(
+                        label: 'Status',
                         value: selectedStatus,
-                        items: ['free', 'Premium']
-                            .map(
-                              (status) => DropdownMenuItem(
+                        items: ['free', 'Premium'].map((status) {
+                          return DropdownMenuItem(
                             value: status,
                             child: Text(
                               status[0].toUpperCase() + status.substring(1),
                             ),
-                          ),
-                        )
-                            .toList(),
-                        onChanged: (value) => setState(() {
-                          selectedStatus = value;
-                        }),
-                        decoration: InputDecoration(
-                          labelText: 'Status',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.bookmark,
-                            color: AppColors.secondaryBlue,
-                          ),
-                        ),
-                        dropdownColor: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Subject Field
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 5,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: subjectController,
-                        decoration: InputDecoration(
-                          labelText: 'Subject',
-                          hintText: 'Enter subject name',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.book,
-                            color: AppColors.secondaryBlue,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Instructor Field
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 5,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: instructorController,
-                        decoration: InputDecoration(
-                          labelText: 'Instructor',
-                          hintText: 'Enter instructor name',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.person,
-                            color: AppColors.secondaryBlue,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 32),
-
-                    // Add Course Button
-                    Container(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        icon: Icon(Icons.add_circle),
-                        label: Text('Create Course'),
-                        onPressed: isLoading
-                            ? null
-                            : () async {
-                          if (titleController.text.isEmpty ||
-                              descriptionController.text.isEmpty ||
-                              subjectController.text.isEmpty ||
-                              selectedStatus == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Please fill in all required fields'),
-                                backgroundColor: AppColors.accentMaroon,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                            );
-                            return;
-                          }
-
-                          setState(() => isLoading = true);
-
-                          String? imageUrl;
-                          if (selectedImage != null) {
-                            imageUrl = await courseProvider.uploadImage(selectedImage!);
-                          }
-
-                          await courseProvider.addCourse(
-                              title: titleController.text,
-                              description: descriptionController.text,
-                              price: double.tryParse(priceController.text),
-                              imageUrl: imageUrl,
-                              status: selectedStatus,
-                              subject: subjectController.text,
-                              instructor: instructorController.text,
-                              duration: durationController.text,
-                              medium: selectedMedium
                           );
-
-                          await courseProvider.sendNotificationToAllUsers(
-                            title: "New Course Added!",
-                            body: "A new course titled '${titleController.text}' is now available. Enroll now!",
-                          );
-
-                          setState(() => isLoading = false);
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Course created successfully'),
-                              backgroundColor: AppColors.primaryGreen,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                          );
-
-                          Navigator.pop(context);
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            selectedStatus = value;
+                          });
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryGreen,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
+                        prefixIcon: Icons.bookmark_rounded,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please select a status';
+                          }
+                          return null;
+                        },
                       ),
-                    ),
-                    SizedBox(height: 16),
 
-                    // Cancel Button
-                    Container(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        icon: Icon(Icons.cancel),
-                        label: Text('Cancel'),
+                      // Subject
+                      CMSFormField(
+                        controller: subjectController,
+                        label: 'Subject',
+                        hintText: 'Enter subject name',
+                        prefixIcon: Icons.book_rounded,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter a subject';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      SizedBox(height: 32),
+
+                      // Create Course Button
+                      CMSButton(
+                        text: 'Create Course',
+                        icon: Icons.add_circle_outline_rounded,
+                        onPressed: isLoading
+                            ? () {}
+                            : () {
+                          if (_formKey.currentState!.validate()) {
+                            _createCourse(courseProvider);
+                          }
+                        },
+                        isLoading: isLoading,
+                        color: CMSDesignSystem.primaryGreen,
+                      ),
+
+                      SizedBox(height: 16),
+
+                      // Cancel Button
+                      CMSButton(
+                        text: 'Cancel',
+                        icon: Icons.cancel_rounded,
+                        isOutlined: true,
+                        color: CMSDesignSystem.accentMaroon,
+                        textColor: CMSDesignSystem.accentMaroon,
                         onPressed: () {
                           Navigator.pop(context);
                         },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.accentMaroon,
-                          side: BorderSide(color: AppColors.accentMaroon),
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
                       ),
-                    ),
-                    SizedBox(height: 32),
-                  ],
+                      SizedBox(height: 32),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1726,23 +1216,33 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                 color: Colors.black.withOpacity(0.5),
                 child: Center(
                   child: Container(
-                    padding: EdgeInsets.all(20),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 24,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          spreadRadius: 5,
+                        ),
+                      ],
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.secondaryBlue),
+                          valueColor: AlwaysStoppedAnimation<Color>(CMSDesignSystem.primaryGreen),
                         ),
                         SizedBox(height: 16),
                         Text(
                           'Creating your course...',
                           style: TextStyle(
-                            color: AppColors.secondaryBlue,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -1755,11 +1255,55 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       ),
     );
   }
-}
 
-extension StringExtension on String {
-  String capitalize() {
-    if (isEmpty) return this;
-    return '${this[0].toUpperCase()}${substring(1)}';
+  Future<void> _createCourse(CourseProvider courseProvider) async {
+    setState(() => isLoading = true);
+
+    try {
+      // Upload the image if selected
+      String? imageUrl;
+      if (selectedImage != null) {
+        imageUrl = await courseProvider.uploadImage(selectedImage!);
+      }
+
+      // Add the course
+      await courseProvider.addCourse(
+        title: titleController.text,
+        description: descriptionController.text,
+        price: double.tryParse(priceController.text),
+        imageUrl: imageUrl,
+        status: selectedStatus,
+        subject: subjectController.text,
+        instructor: instructorController.text,
+        duration: durationController.text,
+        medium: selectedMedium,
+      );
+
+      // Send a notification to all users
+      await courseProvider.sendNotificationToAllUsers(
+        title: "New Course Added!",
+        body: "A new course titled '${titleController.text}' is now available. Enroll now!",
+      );
+
+      setState(() => isLoading = false);
+
+      showCMSToast(
+        context,
+        message: 'Course created successfully',
+        backgroundColor: CMSDesignSystem.primaryGreen,
+        icon: Icons.check_circle_outline_rounded,
+      );
+
+      Navigator.pop(context);
+    } catch (e) {
+      setState(() => isLoading = false);
+
+      showCMSToast(
+        context,
+        message: 'Error creating course: ${e.toString()}',
+        backgroundColor: CMSDesignSystem.error,
+        icon: Icons.error_outline_rounded,
+      );
+    }
   }
 }

@@ -1,11 +1,16 @@
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
+import 'package:nova_science/Service/NotificationBadge.dart';
+import '../../GroupChat/DiscussionScreen.dart';
 import '../AdminPanal/AdminPanelScreen.dart';
+import 'AppTheme.dart';
+
 import 'HomeScreen.dart';
 import 'ProfileScreen.dart';
+import 'ResourceScreen.dart';
 import 'SettingScreen.dart';
 import 'TeacherScreen.dart';
 
@@ -14,39 +19,36 @@ class HomePage extends StatefulWidget {
   _HomePageState createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
-  // Color palette
-  final Color greenColor = const Color(0xFF11261f);
-  final Color yellowColor = const Color(0xFF123755);
-  final Color maroonColor = const Color(0xFF722626);
-  final Color accentColor = const Color(0xFFe9c46a);
-
-  // Secondary colors
-  final Color backgroundColor = const Color(0xFFF5F5F5);
-  final Color surfaceColor = Colors.white;
-  final Color errorColor = const Color(0xFFD32F2F);
-
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
   bool isAdmin = false;
   bool isTeacher = false;
   bool _isLoading = true;
   late AnimationController _animationController;
+  late AnimationController _fadeController;
+
+  // Animation values
+  late Animation<double> _fadeAnimation;
 
   final List<Widget> _commonPages = [];
   final List<String> _commonTitles = [
     'Dashboard',
     'Profile',
+    'Resources',
+    'Discussion', // Added Discussion tab
     'Settings',
   ];
 
   List<Widget> _pages = [];
   List<String> _titles = [];
 
-  // Page icons (using outline variants for a more professional look)
+  // Page icons (using outline variants)
   final List<IconData> _commonIcons = [
     Icons.dashboard_outlined,
     Icons.person_outline,
+    Icons.folder_outlined,
+    Icons.forum_outlined, // Added Discussion icon
     Icons.settings_outlined,
   ];
 
@@ -60,10 +62,22 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       vsync: this,
     );
 
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    _fadeAnimation = CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeInOut,
+    );
+
     // Initialize common pages
     _commonPages.addAll([
       HomeScreen(),
       ProfileScreen(),
+      ResourceScreen(),
+      DiscussionScreen(), // Added Discussion screen
       SettingsScreen(),
     ]);
 
@@ -112,6 +126,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
           _isLoading = false;
         });
+
+        // Start fade animation after data is loaded
+        _fadeController.forward();
       } else {
         setState(() {
           _pages = List.from(_commonPages);
@@ -119,6 +136,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           _icons = List.from(_commonIcons);
           _isLoading = false;
         });
+
+        // Start fade animation after data is loaded
+        _fadeController.forward();
       }
     } catch (e) {
       print('Error checking user role: $e');
@@ -128,6 +148,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         _icons = List.from(_commonIcons);
         _isLoading = false;
       });
+
+      // Start fade animation after data is loaded
+      _fadeController.forward();
     }
   }
 
@@ -150,6 +173,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void dispose() {
     _pageController.dispose();
     _animationController.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 
@@ -159,18 +183,33 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       return _buildLoadingScreen();
     }
 
+    return Theme(
+      data: AppTheme.lightTheme,
+      child: Scaffold(
+        body: FadeTransition(
+          opacity: _fadeAnimation,
+          child: _buildContent(),
+        ),
+      ),
+    );
+  }
+  Widget _buildContent() {
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: AppTheme.backgroundColor,
+      extendBodyBehindAppBar: true,
       appBar: _buildAppBar(),
-      body: PageView(
-        controller: _pageController,
-        physics: NeverScrollableScrollPhysics(),
-        children: _pages,
-        onPageChanged: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
+      body: SafeArea(
+        top: false,
+        child: PageView(
+          controller: _pageController,
+          physics: NeverScrollableScrollPhysics(),
+          children: _pages,
+          onPageChanged: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+        ),
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );
@@ -178,34 +217,44 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   Widget _buildLoadingScreen() {
     return Scaffold(
-      backgroundColor: greenColor,
+      backgroundColor: AppTheme.primaryColor,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              'assets/images/logo.png',
-              height: 80,
-              width: 80,
+            Hero(
+              tag: 'app_logo',
+              child: Image.asset(
+                'assets/images/logo.png',
+                height: 100,
+                width: 100,
+              ),
             ),
-            SizedBox(height: 32),
+            SizedBox(height: 40),
             SizedBox(
-              width: 40,
-              height: 40,
+              width: 48,
+              height: 48,
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.accentColor),
                 strokeWidth: 3,
               ),
             ),
-            SizedBox(height: 24),
-            Text(
-              'Loading',
-              style: GoogleFonts.roboto(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1,
-              ),
+            SizedBox(height: 32),
+            AnimatedBuilder(
+              animation: _animationController..repeat(reverse: true),
+              builder: (context, child) {
+                return Opacity(
+                  opacity: 0.6 + (_animationController.value * 0.4),
+                  child: Text(
+                    'Loading',
+                    style: AppTheme.textTheme.headlineMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -215,16 +264,19 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: greenColor,
+      backgroundColor: AppTheme.primaryColor,
       elevation: 0,
       toolbarHeight: 64,
       centerTitle: false,
       title: Row(
         children: [
-          Image.asset(
-            'assets/images/logo.png',
-            height: 32,
-            width: 32,
+          Hero(
+            tag: 'app_logo',
+            child: Image.asset(
+              'assets/images/logo.png',
+              height: 36,
+              width: 36,
+            ),
           ),
           SizedBox(width: 12),
           Column(
@@ -232,18 +284,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             children: [
               Text(
                 'NOVA LEARN',
-                style: GoogleFonts.roboto(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+                style: AppTheme.textTheme.titleLarge?.copyWith(
                   color: Colors.white,
                   letterSpacing: 0.5,
                 ),
               ),
               Text(
                 _titles[_selectedIndex],
-                style: GoogleFonts.roboto(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
+                style: AppTheme.textTheme.bodyMedium?.copyWith(
                   color: Colors.white.withOpacity(0.8),
                 ),
               ),
@@ -253,55 +301,75 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       ),
       actions: [
         _buildSearchButton(),
-        _buildNotificationButton(),
+        NotificationBadge(child: _buildNotificationButton()),
         SizedBox(width: 8),
       ],
+      flexibleSpace: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.primaryColor,
+              AppTheme.secondaryColor.withOpacity(0.95),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildSearchButton() {
-    return IconButton(
-      icon: Icon(
-        Icons.search_outlined,
-        size: 24,
-        color: Colors.white,
-      ),
-      onPressed: () {
-        // Open search functionality
-        showSearch(
-          context: context,
-          delegate: CustomSearchDelegate(
-            greenColor: greenColor,
-            yellowColor: yellowColor,
-            maroonColor: maroonColor,
-            accentColor: accentColor,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: () {
+          showSearch(
+            context: context,
+            delegate: CustomSearchDelegate(),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Icon(
+            Icons.search_rounded,
+            size: 24,
+            color: Colors.white,
           ),
-        );
-      },
-      tooltip: 'Search',
+        ),
+      ),
     );
   }
 
   Widget _buildNotificationButton() {
-    return Container(
-      margin: EdgeInsets.only(right: 8),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: Stack(
-        alignment: Alignment.center,
+        clipBehavior: Clip.none,
         children: [
-          IconButton(
-            icon: Icon(
-              Icons.notifications_outlined,
-              size: 24,
-              color: Colors.white,
+          Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(24),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(24),
+              onTap: () {
+                Navigator.pushNamed(context, '/notifications');
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Icon(
+                  Icons.notifications_outlined,
+                  size: 24,
+                  color: Colors.white,
+                ),
+              ),
             ),
-            onPressed: () {
-              Navigator.pushNamed(context, '/notifications');
-            },
-            tooltip: 'Notifications',
           ),
           Positioned(
-            top: 10,
-            right: 10,
+            top: 6,
+            right: 6,
             child: _buildNotificationBadge(),
           ),
         ],
@@ -323,12 +391,15 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         return Container(
           padding: EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: maroonColor,
+            color: AppTheme.tertiaryColor,
             shape: BoxShape.circle,
-            border: Border.all(
-              color: greenColor,
-              width: 1.5,
-            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 2,
+                offset: Offset(0, 1),
+              ),
+            ],
           ),
           constraints: BoxConstraints(
             minWidth: 16,
@@ -338,7 +409,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             count > 9 ? '9+' : count.toString(),
             style: TextStyle(
               color: Colors.white,
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: FontWeight.bold,
             ),
             textAlign: TextAlign.center,
@@ -351,49 +422,18 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   Widget _buildBottomNavigationBar() {
     return Container(
       decoration: BoxDecoration(
-        color: surfaceColor,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: Offset(0, -1),
-          ),
-        ],
+        color: AppTheme.surfaceColor,
+        boxShadow: AppTheme.lightShadow,
       ),
       child: SafeArea(
-        child: Container(
-          height: 64,
-          padding: EdgeInsets.symmetric(horizontal: 8),
+        child: SizedBox(
+          height: 60, // Fixed, conservative height
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: List.generate(_icons.length, (index) {
               bool isSelected = _selectedIndex == index;
               return Expanded(
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => _onItemTapped(index),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _icons[index],
-                          color: isSelected ? maroonColor : Colors.grey.shade600,
-                          size: 24,
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          _getTabTitle(index),
-                          style: GoogleFonts.roboto(
-                            fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,
-                            color: isSelected ? maroonColor : Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                child: _buildNavItem(index, isSelected),
               );
             }),
           ),
@@ -402,43 +442,93 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     );
   }
 
+  Widget _buildNavItem(int index, bool isSelected) {
+    // Using a simpler layout structure to avoid overflow issues
+    return InkWell(
+      onTap: () => _onItemTapped(index),
+      child: Container(
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: isSelected
+              ? Border(
+            top: BorderSide(
+              color: AppTheme.tertiaryColor,
+              width: 2.0,
+            ),
+          )
+              : null,
+        ),
+        padding: EdgeInsets.only(top: isSelected ? 0 : 2), // Compensate for border height
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _icons[index],
+              color: isSelected
+                  ? AppTheme.tertiaryColor
+                  : AppTheme.textTertiaryColor,
+              size: 22,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              _getTabTitle(index),
+              style: TextStyle(
+                color: isSelected
+                    ? AppTheme.tertiaryColor
+                    : AppTheme.textTertiaryColor,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _getTabTitle(int index) {
-    switch (index) {
-      case 0: return 'Dashboard';
-      case 1: return 'Profile';
-      case 2: return 'Settings';
-      case 3:
-        if (isAdmin) return 'Admin';
-        if (isTeacher) return 'Teaching';
-        return '';
-      default: return '';
+    if (index < _titles.length) {
+      return _titles[index];
     }
+    return '';
   }
 }
 
-// Custom search delegate
+// Updated search delegate to use the new theme
 class CustomSearchDelegate extends SearchDelegate<String> {
-  final Color greenColor;
-  final Color yellowColor;
-  final Color maroonColor;
-  final Color accentColor;
-
-  CustomSearchDelegate({
-    required this.greenColor,
-    required this.yellowColor,
-    required this.maroonColor,
-    required this.accentColor,
-  });
+  @override
+  ThemeData appBarTheme(BuildContext context) {
+    return AppTheme.lightTheme.copyWith(
+      appBarTheme: AppBarTheme(
+        backgroundColor: AppTheme.primaryColor,
+        iconTheme: IconThemeData(color: Colors.white),
+        elevation: 0,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
+      ),
+      scaffoldBackgroundColor: AppTheme.surfaceColor,
+      inputDecorationTheme: InputDecorationTheme(
+        hintStyle: TextStyle(color: Colors.white70),
+        border: InputBorder.none,
+      ),
+    );
+  }
 
   @override
   List<Widget> buildActions(BuildContext context) {
     return [
-      IconButton(
-        icon: Icon(Icons.clear, color: Colors.white),
-        onPressed: () {
-          query = '';
-        },
-        tooltip: 'Clear',
+      AnimatedOpacity(
+        opacity: query.isNotEmpty ? 1.0 : 0.0,
+        duration: Duration(milliseconds: 200),
+        child: IconButton(
+          icon: Icon(Icons.clear, color: Colors.white),
+          onPressed: () {
+            query = '';
+          },
+          tooltip: 'Clear',
+        ),
       ),
     ];
   }
@@ -456,6 +546,37 @@ class CustomSearchDelegate extends SearchDelegate<String> {
 
   @override
   Widget buildResults(BuildContext context) {
+    return _buildSearchResults(context);
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    if (query.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.search_rounded,
+              size: 64,
+              color: AppTheme.textTertiaryColor.withOpacity(0.5),
+            ),
+            SizedBox(height: 24),
+            Text(
+              'Search for courses, topics, or instructors',
+              style: AppTheme.textTheme.bodyLarge?.copyWith(
+                color: AppTheme.textSecondaryColor,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _buildSearchResults(context);
+  }
+
+  Widget _buildSearchResults(BuildContext context) {
     return FutureBuilder<QuerySnapshot>(
       future: FirebaseFirestore.instance
           .collection('courses')
@@ -467,7 +588,7 @@ class CustomSearchDelegate extends SearchDelegate<String> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(
             child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(maroonColor),
+              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.tertiaryColor),
             ),
           );
         }
@@ -477,13 +598,16 @@ class CustomSearchDelegate extends SearchDelegate<String> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.search_off_outlined, size: 48, color: Colors.grey.shade400),
-                SizedBox(height: 16),
+                Icon(
+                  Icons.search_off_outlined,
+                  size: 64,
+                  color: AppTheme.textTertiaryColor.withOpacity(0.5),
+                ),
+                SizedBox(height: 24),
                 Text(
-                  'No results found',
-                  style: GoogleFonts.roboto(
-                    fontSize: 16,
-                    color: Colors.grey.shade600,
+                  'No courses found for "$query"',
+                  style: AppTheme.textTheme.bodyLarge?.copyWith(
+                    color: AppTheme.textSecondaryColor,
                   ),
                 ),
               ],
@@ -499,49 +623,13 @@ class CustomSearchDelegate extends SearchDelegate<String> {
             final data = doc.data() as Map<String, dynamic>;
 
             return Card(
-              margin: EdgeInsets.only(bottom: 8),
-              elevation: 1,
+              margin: EdgeInsets.only(bottom: 12),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-                side: BorderSide(color: Colors.grey.shade200),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: ListTile(
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: Image.network(
-                    data['imageUrl'] ?? 'https://via.placeholder.com/50',
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        width: 50,
-                        height: 50,
-                        color: Colors.grey.shade200,
-                        child: Icon(Icons.image_not_supported_outlined, color: Colors.grey),
-                      );
-                    },
-                  ),
-                ),
-                title: Text(
-                  data['courseTitle'] ?? 'Unknown Course',
-                  style: GoogleFonts.roboto(
-                    fontWeight: FontWeight.w500,
-                    color: greenColor,
-                  ),
-                ),
-                subtitle: Text(
-                  data['instructor'] ?? 'Unknown Instructor',
-                  style: GoogleFonts.roboto(
-                    fontSize: 12,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-                trailing: Icon(Icons.arrow_forward,
-                  size: 16,
-                  color: yellowColor,
-                ),
+              elevation: 2,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
                 onTap: () {
                   Navigator.pushNamed(
                     context,
@@ -549,61 +637,82 @@ class CustomSearchDelegate extends SearchDelegate<String> {
                     arguments: doc.id,
                   );
                 },
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          data['imageUrl'] ?? 'https://via.placeholder.com/60',
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 60,
+                              height: 60,
+                              color: AppTheme.primaryColor.withOpacity(0.1),
+                              child: Icon(
+                                Icons.book_outlined,
+                                color: AppTheme.primaryColor,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              data['courseTitle'] ?? 'Unknown Course',
+                              style: AppTheme.textTheme.titleMedium?.copyWith(
+                                color: AppTheme.primaryColor,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              data['instructor'] ?? 'Unknown Instructor',
+                              style: AppTheme.textTheme.bodySmall?.copyWith(
+                                color: AppTheme.textSecondaryColor,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.people_outline,
+                                  size: 14,
+                                  color: AppTheme.textTertiaryColor,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  '${data['students'] ?? 0} students',
+                                  style: AppTheme.textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textTertiaryColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: AppTheme.secondaryColor,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             );
           },
         );
       },
-    );
-  }
-
-  @override
-  Widget buildSuggestions(BuildContext context) {
-    if (query.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search, size: 48, color: Colors.grey.shade300),
-            SizedBox(height: 16),
-            Text(
-              'Search for courses',
-              style: GoogleFonts.roboto(
-                fontSize: 16,
-                color: Colors.grey.shade600,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return buildResults(context);
-  }
-
-  @override
-  ThemeData appBarTheme(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return theme.copyWith(
-      appBarTheme: AppBarTheme(
-        backgroundColor: greenColor,
-        iconTheme: IconThemeData(color: Colors.white),
-        elevation: 0,
-      ),
-      textTheme: theme.textTheme.copyWith(
-        titleLarge: GoogleFonts.roboto(
-          color: Colors.white,
-          fontSize: 18,
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        hintStyle: GoogleFonts.roboto(
-          color: Colors.white70,
-          fontSize: 16,
-        ),
-      ),
-      scaffoldBackgroundColor: Colors.white,
     );
   }
 }

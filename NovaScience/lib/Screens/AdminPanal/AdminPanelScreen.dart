@@ -250,11 +250,29 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
                         index: 5,
                       ),
                       _buildAdminCard(
+                        icon: Icons.book_online,
+                        title: 'Resource Center Management',
+                        subtitle: 'Configure The Resources',
+                        onTap: () {
+                          Navigator.pushNamed(context, '/resourceManagement');
+                        },
+                        index: 5,
+                      ),
+                      _buildAdminCard(
                         icon: Icons.campaign_outlined,
                         title: 'Advertisement Management',
                         subtitle: 'Add, edit, or delete advertisements',
                         onTap: () {
                           Navigator.pushNamed(context, '/manageAdvertisements');
+                        },
+                        index: 6,
+                      ),
+                      _buildAdminCard(
+                        icon: Icons.phone_in_talk,
+                        title: 'Discussion Management',
+                        subtitle: 'Add, edit, or delete advertisements',
+                        onTap: () {
+                          Navigator.pushNamed(context, '/discusionManagement');
                         },
                         index: 6,
                       ),

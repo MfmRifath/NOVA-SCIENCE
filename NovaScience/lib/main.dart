@@ -3,17 +3,22 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:nova_science/Screens/AdminPanal/EnrollUsersScreen.dart';
 import 'package:nova_science/Screens/AdminPanal/ManageAdvertisementsScreen.dart';
+import 'package:nova_science/Screens/AdminPanal/ResourceDashboardScreen.dart';
+import 'package:nova_science/Screens/AdminPanal/ResourceManagementScreen.dart';
 import 'package:nova_science/Screens/AdminPanal/TeacherPaymentsScreen.dart';
 import 'package:nova_science/Screens/StartScreen/ForgertPasswordScreen.dart';
 import 'package:nova_science/Screens/StartScreen/HomeScreen.dart';
-import 'package:nova_science/Screens/StartScreen/NotificationScreen.dart';
 import 'package:nova_science/Screens/StartScreen/ProfileScreen.dart';
 import 'package:nova_science/Screens/StartScreen/SignUpScreen.dart';
+import 'package:nova_science/Service/CourseNotificationService.dart';
+import 'package:nova_science/Service/CourseNotificationsScreen.dart';
+import 'package:nova_science/Service/NotificationCenterScreen.dart';
 import 'package:provider/provider.dart';
 import 'package:nova_science/Service/AuthService.dart' as service;
 import 'Modals/CourseAndSectionAndVideos.dart';
 import 'Screens/AdminPanal/CourseManagement.dart';
 import 'Screens/AdminPanal/DashboardOverview.dart';
+import 'Screens/AdminPanal/DiscussionManagementScreen.dart';
 import 'Screens/AdminPanal/Reports and Analytics.dart';
 import 'Screens/AdminPanal/SystemSettingsScreen.dart';
 import 'Screens/AdminPanal/UserManagement.dart';
@@ -26,7 +31,8 @@ import 'Screens/StartScreen/onboardingScreen.dart';
 import 'Screens/StartScreen/SplashScreen.dart';
 import 'Service/AdvertisementProvider.dart';
 import 'Service/CourseProvider.dart';
-import 'Service/AuthService.dart'; // Make sure to import your AuthService
+import 'Service/AuthService.dart';
+import 'Service/NotificationService.dart'; // Make sure to import your AuthService
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +45,8 @@ void main() async {
       storageBucket: 'novascience-31488.appspot.com',
     ),
   );
+  final notificationService = NotificationService();
+  await notificationService.initialize();
   AuthService authService = AuthService();
   FirebaseAuth.instance.authStateChanges().listen((User? user) {
     if (user != null) {
@@ -76,9 +84,10 @@ class Routes {
   static const String manageAdvertisements = '/manageAdvertisements';
   static const String forgetPassword = '/forgotPassword';
   static const String teachersPayments = '/teachersPayment';
+  static const String resourceManagement = '/resourceManagement';
+  static const String DiscusionManagement = '/discusionManagement';
 
 }
-
 class NovaScience extends StatelessWidget {
   const NovaScience({Key? key}) : super(key: key);
 
@@ -126,7 +135,7 @@ class NovaScience extends StatelessWidget {
             builder = (context) => CourseManagementScreen();
             break;
           case Routes.reports:
-            builder = (context) => ReportsAnalyticsScreen();
+            builder = (context) => AnalyticsScreen();
             break;
           case Routes.signUp:
             builder = (context) => SignUpScreen();
@@ -138,10 +147,10 @@ class NovaScience extends StatelessWidget {
             builder = (context) => EnrollUsersScreen();
             break;
           case Routes.notifications:
-            builder = (context) => NotificationScreen();
+            builder = (context) => CourseNotificationsScreen();
             break;
           case Routes.manageAdvertisements :
-            builder = (context) => ManageAdvertisementsScreen();
+            builder = (context) => AdvertisementManagementScreen();
             break;
           case Routes.teachersPayments :
             builder = (context) => TeacherPaymentsScreen();
@@ -149,6 +158,12 @@ class NovaScience extends StatelessWidget {
            // Optional: break here for clarity
           case Routes.forgetPassword :
             builder = (context) => ForgotPasswordScreen();
+            break;
+          case Routes.resourceManagement :
+            builder = (context) => ResourceManagementScreen()!;
+            break;
+          case Routes.DiscusionManagement :
+            builder = (context) => DiscussionManagementScreen();
             break;
         }
         return MaterialPageRoute(builder: builder);

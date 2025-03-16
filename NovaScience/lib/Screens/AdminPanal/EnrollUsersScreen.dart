@@ -1107,16 +1107,48 @@ class _EnrollUsersScreenState extends State<EnrollUsersScreen> with SingleTicker
       // Get the current date as the enrollment date
       DateTime enrollmentDate = DateTime.now();
 
+      // Use a batch write for consistency across multiple documents
+      WriteBatch batch = FirebaseFirestore.instance.batch();
+
+      // Reference to the user document
+      DocumentReference userRef = FirebaseFirestore.instance.collection('users').doc(userId);
+
+      // Reference to the course document
+      DocumentReference courseRef = FirebaseFirestore.instance.collection('courses').doc(courseId);
+
       // Update the user's document with the enrollment details
-      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+      batch.update(userRef, {
         'enrolledCourses': FieldValue.arrayUnion([
           {
             'courseId': courseId,
             'enrollmentDate': enrollmentDate,
             'enrollmentEndDate': endDate,
+            'progress': 0.0, // Initialize progress tracking
           }
         ]),
       });
+
+      // Create a dedicated enrollment record for detailed tracking
+      DocumentReference enrollmentRef = FirebaseFirestore.instance.collection('enrollments').doc();
+      batch.set(enrollmentRef, {
+        'userId': userId,
+        'courseId': courseId,
+        'enrollmentDate': enrollmentDate,
+        'enrollmentEndDate': endDate,
+        'progress': 0.0,
+        'lastAccessed': enrollmentDate,
+        'hoursSpent': 0.0,
+        'active': true,
+      });
+
+      // Update the course document to increment the student count
+      batch.update(courseRef, {
+        'students': FieldValue.increment(1),
+        'enrolledUserIds': FieldValue.arrayUnion([userId]),
+      });
+
+      // Commit all the batch operations
+      await batch.commit();
 
       // Reset selections - fixed the DateTime? null assignment by using 'this.' to reference class field
       setState(() {

@@ -23,6 +23,10 @@ class CourseProvider with ChangeNotifier {
   // ============================================================================
   // COURSE FETCHING METHODS
   // ============================================================================
+// Add to CourseProvider class
+  Course? _selectedCourse;
+  Course? get selectedCourse => _selectedCourse;
+
 
   /// Fetch all courses from Firestore.
   Future<void> fetchCourses() async {
@@ -673,32 +677,43 @@ class CourseProvider with ChangeNotifier {
   }
 
   /// Update a video’s details stored in a subcollection (if using subcollections for sections/videos).
-  Future<void> updateVideo(String courseId, String sectionTitle, int videoIndex, String newTitle, String newVideoUrl) async {
+  // Update video in a section
+  Future<void> updateVideo(String courseId, String sectionTitle, int videoIndex, Video newVideo) async {
     try {
-      CollectionReference sectionsRef = _firestore.collection('courses').doc(courseId).collection('sections');
-      QuerySnapshot query = await sectionsRef.where('sectionTitle', isEqualTo: sectionTitle).get();
-      if (query.docs.isNotEmpty) {
-        DocumentReference sectionDoc = query.docs.first.reference;
-        CollectionReference videosRef = sectionDoc.collection('videos');
-        QuerySnapshot videos = await videosRef.get();
-        if (videoIndex < videos.docs.length) {
-          DocumentReference videoDoc = videos.docs[videoIndex].reference;
-          await videoDoc.update({
-            'title': newTitle,
-            'videoUrl': newVideoUrl,
-          });
-        } else {
-          throw Exception("Video index out of range.");
+      final courseDoc = await FirebaseFirestore.instance.collection('courses').doc(courseId).get();
+      if (!courseDoc.exists) return;
+
+      final courseData = courseDoc.data() as Map<String, dynamic>;
+      final List<dynamic> sections = courseData['sections'] ?? [];
+
+      for (int i = 0; i < sections.length; i++) {
+        if (sections[i]['sectionTitle'] == sectionTitle) {
+          final List<dynamic> videos = sections[i]['videos'] ?? [];
+          if (videoIndex >= 0 && videoIndex < videos.length) {
+            videos[videoIndex] = {
+              'title': newVideo.title,
+              'videoUrl': newVideo.videoUrl,
+            };
+          }
+          sections[i]['videos'] = videos;
+          break;
         }
-      } else {
-        throw Exception("Section not found: $sectionTitle");
       }
+
+      // Update Firestore
+      await FirebaseFirestore.instance.collection('courses').doc(courseId).update({
+        'sections': sections,
+      });
+
+      // Update local course data
+      await getCourseById(courseId);
+
+      notifyListeners();
     } catch (e) {
-      print("Error updating video: $e");
-      rethrow;
+      print('Error updating video: $e');
+      throw e;
     }
   }
-
   /// Send a push notification to all users and also store a notification document.
   Future<void> sendNotificationToAllUsers({required String title, required String body}) async {
     try {
@@ -761,6 +776,40 @@ class CourseProvider with ChangeNotifier {
       return 0;
     }
   }
+// Update PDF title
+  Future<void> updatePdfTitle(String courseId, String sectionTitle, int pdfIndex, String newTitle) async {
+    try {
+      final courseDoc = await FirebaseFirestore.instance.collection('courses').doc(courseId).get();
+      if (!courseDoc.exists) return;
+
+      final courseData = courseDoc.data() as Map<String, dynamic>;
+      final List<dynamic> sections = courseData['sections'] ?? [];
+
+      for (int i = 0; i < sections.length; i++) {
+        if (sections[i]['sectionTitle'] == sectionTitle) {
+          final List<dynamic> pdfs = sections[i]['pdfs'] ?? [];
+          if (pdfIndex >= 0 && pdfIndex < pdfs.length) {
+            pdfs[pdfIndex]['title'] = newTitle;
+          }
+          sections[i]['pdfs'] = pdfs;
+          break;
+        }
+      }
+
+      // Update Firestore
+      await FirebaseFirestore.instance.collection('courses').doc(courseId).update({
+        'sections': sections,
+      });
+
+      // Update local course data
+      await getCourseById(courseId);
+
+      notifyListeners();
+    } catch (e) {
+      print('Error updating PDF title: $e');
+      throw e;
+    }
+  }
 
   /// Helper method to count how many users are enrolled in a given course.
   Future<int> _getEnrollmentCount(String courseId) async {
@@ -815,4 +864,62 @@ class CourseProvider with ChangeNotifier {
       return null;
     }
   }
+  Future<void> updateSectionTitle(String courseId, String oldTitle, String newTitle) async {
+    try {
+      final courseDoc = await FirebaseFirestore.instance.collection('courses').doc(courseId).get();
+      if (!courseDoc.exists) return;
+
+      final courseData = courseDoc.data() as Map<String, dynamic>;
+      final List<dynamic> sections = courseData['sections'] ?? [];
+
+      for (int i = 0; i < sections.length; i++) {
+        if (sections[i]['sectionTitle'] == oldTitle) {
+          sections[i]['sectionTitle'] = newTitle;
+          break;
+        }
+      }
+
+      // Update Firestore
+      await FirebaseFirestore.instance.collection('courses').doc(courseId).update({
+        'sections': sections,
+      });
+
+      // Update local course data
+      await getCourseById(courseId);
+
+      notifyListeners();
+    } catch (e) {
+      print('Error updating section title: $e');
+      throw e;
+    }
+  }
+  Future<void> reorderSections(String courseId, int oldIndex, int newIndex) async {
+    try {
+      final courseDoc = await FirebaseFirestore.instance.collection('courses').doc(courseId).get();
+      if (!courseDoc.exists) return;
+
+      final courseData = courseDoc.data() as Map<String, dynamic>;
+      final List<dynamic> sections = courseData['sections'] ?? [];
+
+      // Perform the reordering
+      final sectionToMove = sections[oldIndex];
+      sections.removeAt(oldIndex);
+      sections.insert(newIndex, sectionToMove);
+
+      // Update Firestore
+      await FirebaseFirestore.instance.collection('courses').doc(courseId).update({
+        'sections': sections,
+      });
+
+      // Update local course data
+      await getCourseById(courseId);
+
+      notifyListeners();
+    } catch (e) {
+      print('Error reordering sections: $e');
+      throw e;
+    }
+  }
+  // Add setter for selected course (optional)
+
 }

@@ -118,7 +118,7 @@ class JoinScreen extends StatelessWidget {
 
           // Organization name
           Text(
-            'NOVA SCIENCE',
+            'NOVA LEARN',
             style: GoogleFonts.roboto(
               fontSize: 20,
               fontWeight: FontWeight.w700,
